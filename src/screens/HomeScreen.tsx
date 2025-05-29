@@ -62,13 +62,30 @@ const HomeScreen: React.FC = () => {
       gender: 'male',
       experienceLevel: 'intermediate',
       goals: ['strength', 'muscle'],
-      createdAt: new Date()
+      createdAt: new Date(),
+      personalDetails: {
+        targetPhysique: 'lean_muscle',
+        bodyFatGoal: 12,
+        specificGoals: ['visible abs', 'vascularity', 'bigger shoulders'],
+        weakBodyParts: ['legs', 'back', 'forearms'],
+        priorityMuscles: ['quadriceps', 'lats', 'forearm flexors'],
+        preferredWorkoutStyle: 'bodybuilding',
+        workoutFrequency: 5,
+        sessionDuration: 75,
+        restDayPreferences: ['active recovery', 'light cardio'],
+        injuries: [],
+        allergies: [],
+        dietaryRestrictions: [],
+        motivationalFactors: ['progress photos', 'strength gains', 'compliments'],
+        personalChallenges: ['consistency', 'diet discipline'],
+        additionalNotes: 'Wants lean physique with good muscle definition. Struggles with leg development and back strength. Very motivated by visible progress.'
+      }
     };
 
     try {
       await storageService.saveUserProfile(demoProfile);
       setUserProfile(demoProfile);
-      Alert.alert('Success', 'Profile created! You can update it anytime.');
+      Alert.alert('Success', 'Profile created with detailed fitness preferences! Your AI coach now knows you personally.');
     } catch (error) {
       Alert.alert('Error', 'Failed to create profile');
     }

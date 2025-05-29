@@ -9,6 +9,39 @@ export interface UserProfile {
   experienceLevel: 'beginner' | 'intermediate' | 'advanced';
   goals: Array<'strength' | 'muscle' | 'endurance' | 'weight_loss'>;
   createdAt: Date;
+  
+  // Detailed personal fitness profile
+  personalDetails: {
+    // Physical characteristics and goals
+    targetPhysique: 'lean_muscle' | 'bulk' | 'athletic' | 'powerlifter' | 'endurance';
+    bodyFatGoal?: number; // target body fat percentage
+    specificGoals: string[]; // e.g., "visible abs", "vascularity", "bigger shoulders"
+    
+    // Weak points and focus areas
+    weakBodyParts: Array<'legs' | 'back' | 'chest' | 'shoulders' | 'arms' | 'core' | 'forearms'>;
+    priorityMuscles: string[]; // specific muscles to focus on
+    
+    // Training preferences
+    preferredWorkoutStyle: 'powerlifting' | 'bodybuilding' | 'calisthenics' | 'crossfit' | 'mixed';
+    workoutFrequency: number; // days per week
+    sessionDuration: number; // preferred minutes per session
+    restDayPreferences: string[];
+    
+    // Limitations and considerations
+    injuries: Array<{
+      bodyPart: string;
+      description: string;
+      limitations: string[];
+      date: Date;
+    }>;
+    allergies: string[];
+    dietaryRestrictions: string[];
+    
+    // Personal notes and context
+    motivationalFactors: string[]; // what motivates them
+    personalChallenges: string[]; // what they struggle with
+    additionalNotes: string; // free-form personal context
+  };
 }
 
 // Exercise Types
@@ -127,6 +160,11 @@ export interface ChatContext {
     averageWorkoutDuration: number;
     strongestLifts: ProgressRecord[];
   };
+  // Enhanced context for personalization
+  userProfile?: UserProfile;
+  workoutHistory?: Workout[];
+  dayOfWeek?: string;
+  currentTime?: string;
 }
 
 // Navigation Types
