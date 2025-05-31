@@ -19,6 +19,10 @@ import type { RootStackParamList } from '../types';
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;
 
+// Environment-based configuration for demo vs production
+const DEFAULT_USER_NAME = process.env.DEFAULT_USER_NAME || 'Fitness Enthusiast';
+const IS_DEMO_MODE = process.env.NODE_ENV === 'development' || process.env.DEMO_MODE === 'true';
+
 type HomeState = 'dashboard' | 'active' | 'complete';
 
 const HomeScreen: React.FC = () => {
@@ -53,15 +57,15 @@ const HomeScreen: React.FC = () => {
       let profile = await storageService.getUserProfile();
       console.log('🏠 HomeScreen - Initial profile load:', profile);
       
-      // Update profile name if it's not "Tanmay"
-      if (!profile || profile.name !== 'Tanmay') {
-        console.log('🏠 HomeScreen - Updating profile name to Tanmay...');
+      // Update profile name if needed (for demo mode only)
+      if (IS_DEMO_MODE && (!profile || profile.name !== DEFAULT_USER_NAME)) {
+        console.log('🏠 HomeScreen - Demo mode: Setting demo profile...');
         const updatedProfile: UserProfile = profile ? {
           ...profile,
-          name: 'Tanmay'
+          name: DEFAULT_USER_NAME
         } : {
           id: 'user-1',
-          name: 'Tanmay',
+          name: DEFAULT_USER_NAME,
           age: 25,
           weight: 70,
           height: 175,
@@ -270,7 +274,7 @@ const HomeScreen: React.FC = () => {
   const createDemoProfile = async () => {
     const demoProfile: UserProfile = {
       id: 'user-1',
-      name: 'Tanmay',
+      name: DEFAULT_USER_NAME,
       age: 25,
       weight: 70,
       height: 175,
