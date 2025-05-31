@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -34,7 +34,7 @@ const WorkoutScreen: React.FC<Props> = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [isMountedRef, setIsMountedRef] = useState(true);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       console.log('🔍 Loading workout screen data...');
       const [bundlesData, routinesData, recentWorkoutsData] = await Promise.all([
@@ -90,7 +90,7 @@ const WorkoutScreen: React.FC<Props> = ({ navigation }) => {
     } finally {
       if (isMountedRef) setLoading(false);
     }
-  };
+  }, [isMountedRef]);
 
   useEffect(() => {
     loadData();
@@ -98,18 +98,29 @@ const WorkoutScreen: React.FC<Props> = ({ navigation }) => {
     return () => {
       setIsMountedRef(false);
     };
-  }, []);
+  }, [loadData]);
 
   const getFallbackTodaysRoutine = (routines: WorkoutRoutine[]): WorkoutRoutine | null => {
     const dayOfWeek = new Date().getDay();
     
+    // Simple scheduling: Push day on Monday/Thursday, Full body on Wednesday/Saturday
     if (dayOfWeek === 1 || dayOfWeek === 4) { // Monday or Thursday
-      return routines.find(r => r.id === 'push-day') || null;
+      // Try multiple fallback strategies for push-style workouts
+      return routines.find(r => r.id === 'push-day') || 
+             routines.find(r => r.name.toLowerCase().includes('push')) ||
+             routines.find(r => r.name.toLowerCase().includes('chest')) ||
+             routines.find(r => r.name.toLowerCase().includes('upper')) ||
+             routines[0] || null;
     } else if (dayOfWeek === 3 || dayOfWeek === 6) { // Wednesday or Saturday
-      return routines.find(r => r.id === 'beginner-full-body') || null;
+      // Try multiple fallback strategies for full body workouts
+      return routines.find(r => r.id === 'beginner-full-body') ||
+             routines.find(r => r.name.toLowerCase().includes('full body')) ||
+             routines.find(r => r.name.toLowerCase().includes('beginner')) ||
+             routines.find(r => r.name.toLowerCase().includes('total body')) ||
+             routines[0] || null;
     }
     
-    return null;
+    return null; // Rest days: Tuesday, Friday, Sunday
   };
 
   const startWorkout = (routine: WorkoutRoutine) => {
