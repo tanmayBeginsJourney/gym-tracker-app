@@ -57,7 +57,9 @@ export default function BundleManagerScreen({ navigation, route }: Props) {
   const [saving, setSaving] = useState(false);
   const [showRoutineSelector, setShowRoutineSelector] = useState(false);
   const [selectedDay, setSelectedDay] = useState<DayOfWeek | null>(null);
-  const [editingBundle, setEditingBundle] = useState<RoutineBundle | null>(null);
+  const [editingBundle, setEditingBundle] = useState<RoutineBundle | null>(
+    route.params?.editingBundle ?? null
+  );
 
   const isEditing = mode === 'edit' && !!editingBundle;
 
@@ -67,7 +69,7 @@ export default function BundleManagerScreen({ navigation, route }: Props) {
 
   const loadData = async () => {
     try {
-      console.log('🔍 Loading bundle manager data...');
+      setLoading(true);
       const [bundlesData, routinesData] = await Promise.all([
         storageService.getAllRoutineBundles(),
         storageService.getAllRoutines()

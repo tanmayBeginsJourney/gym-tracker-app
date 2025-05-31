@@ -54,6 +54,7 @@ const HomeScreen: React.FC = () => {
 
   const loadDashboardData = async () => {
     try {
+      setLoading(true);
       let profile = await storageService.getUserProfile();
       console.log('🏠 HomeScreen - Initial profile load:', profile);
       
@@ -120,6 +121,7 @@ const HomeScreen: React.FC = () => {
 
   const loadTodaysRoutine = async () => {
     try {
+      setLoading(true);
       // Load default bundle
       const bundle = await storageService.getDefaultRoutineBundle();
       setDefaultBundle(bundle);
@@ -145,6 +147,8 @@ const HomeScreen: React.FC = () => {
       setTodaysRoutine(routine);
     } catch (error) {
       console.error('Error loading today\'s routine:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
