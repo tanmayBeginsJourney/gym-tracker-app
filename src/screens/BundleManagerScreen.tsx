@@ -19,6 +19,7 @@ interface Props {
   route: {
     params?: {
       editingBundle?: RoutineBundle;
+      mode?: 'list' | 'create' | 'edit';
     };
   };
 }
@@ -34,6 +35,11 @@ const DAYS_OF_WEEK: { key: DayOfWeek; label: string; short: string }[] = [
 ];
 
 export default function BundleManagerScreen({ navigation, route }: Props) {
+  // State for bundle list mode
+  const [bundles, setBundles] = useState<RoutineBundle[]>([]);
+  const [mode, setMode] = useState<'list' | 'create' | 'edit'>(route.params?.mode || 'list');
+  
+  // State for create/edit mode
   const [bundleName, setBundleName] = useState('');
   const [bundleDescription, setBundleDescription] = useState('');
   const [routineSchedule, setRoutineSchedule] = useState<{ [key in DayOfWeek]: string | null }>({
@@ -51,9 +57,9 @@ export default function BundleManagerScreen({ navigation, route }: Props) {
   const [saving, setSaving] = useState(false);
   const [showRoutineSelector, setShowRoutineSelector] = useState(false);
   const [selectedDay, setSelectedDay] = useState<DayOfWeek | null>(null);
+  const [editingBundle, setEditingBundle] = useState<RoutineBundle | null>(null);
 
-  const editingBundle = route.params?.editingBundle;
-  const isEditing = !!editingBundle;
+  const isEditing = mode === 'edit' && !!editingBundle;
 
   useEffect(() => {
     loadData();
@@ -62,8 +68,13 @@ export default function BundleManagerScreen({ navigation, route }: Props) {
   const loadData = async () => {
     try {
       console.log('🔍 Loading bundle manager data...');
-      const routines = await storageService.getAllRoutines();
-      setAvailableRoutines(routines);
+      const [bundlesData, routinesData] = await Promise.all([
+        storageService.getAllRoutineBundles(),
+        storageService.getAllRoutines()
+      ]);
+      
+      setBundles(bundlesData);
+      setAvailableRoutines(routinesData);
 
       if (isEditing && editingBundle) {
         console.log('✏️ Loading bundle for editing:', editingBundle.name);
@@ -74,10 +85,89 @@ export default function BundleManagerScreen({ navigation, route }: Props) {
       }
     } catch (error) {
       console.error('❌ Error loading bundle manager data:', error);
-      Alert.alert('Error', 'Failed to load routines. Please try again.');
+      Alert.alert('Error', 'Failed to load data. Please try again.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const setDefaultBundle = async (bundleId: string) => {
+    try {
+      console.log('🎯 Setting default bundle:', bundleId);
+      await storageService.setDefaultRoutineBundle(bundleId);
+      await loadData(); // Reload to update UI
+      Alert.alert('Success', 'Default workout schedule updated!');
+    } catch (error) {
+      console.error('❌ Error setting default bundle:', error);
+      Alert.alert('Error', 'Failed to set default schedule. Please try again.');
+    }
+  };
+
+  const deleteBundle = async (bundle: RoutineBundle) => {
+    Alert.alert(
+      'Delete Schedule',
+      `Are you sure you want to delete "${bundle.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await storageService.deleteRoutineBundle(bundle.id);
+              await loadData(); // Reload to update UI
+              Alert.alert('Success', 'Schedule deleted successfully!');
+            } catch (error) {
+              console.error('❌ Error deleting bundle:', error);
+              Alert.alert('Error', 'Failed to delete schedule. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const createNewBundle = () => {
+    setMode('create');
+    setBundleName('');
+    setBundleDescription('');
+    setRoutineSchedule({
+      monday: null,
+      tuesday: null,
+      wednesday: null,
+      thursday: null,
+      friday: null,
+      saturday: null,
+      sunday: null,
+    });
+    setSetAsDefault(false);
+    setEditingBundle(null);
+  };
+
+  const editBundle = (bundle: RoutineBundle) => {
+    setMode('edit');
+    setBundleName(bundle.name);
+    setBundleDescription(bundle.description || '');
+    setRoutineSchedule({ ...bundle.routineSchedule });
+    setSetAsDefault(bundle.isDefault);
+    setEditingBundle(bundle);
+  };
+
+  const cancelEdit = () => {
+    setMode('list');
+    setBundleName('');
+    setBundleDescription('');
+    setRoutineSchedule({
+      monday: null,
+      tuesday: null,
+      wednesday: null,
+      thursday: null,
+      friday: null,
+      saturday: null,
+      sunday: null,
+    });
+    setSetAsDefault(false);
+    setEditingBundle(null);
   };
 
   const selectRoutineForDay = (day: DayOfWeek) => {
@@ -116,6 +206,17 @@ export default function BundleManagerScreen({ navigation, route }: Props) {
     return { workoutDays, restDays, totalEstimatedTime };
   };
 
+  const getBundleStats = (bundle: RoutineBundle) => {
+    const workoutDays = Object.values(bundle.routineSchedule).filter(id => id !== null).length;
+    const totalEstimatedTime = Object.values(bundle.routineSchedule).reduce((total, routineId) => {
+      if (!routineId) return total;
+      const routine = availableRoutines.find(r => r.id === routineId);
+      return total + (routine?.estimatedDuration || 0);
+    }, 0);
+
+    return { workoutDays, totalEstimatedTime };
+  };
+
   const saveBundle = async () => {
     if (!bundleName.trim()) {
       Alert.alert('Validation Error', 'Please enter a bundle name.');
@@ -130,29 +231,34 @@ export default function BundleManagerScreen({ navigation, route }: Props) {
 
     setSaving(true);
     try {
-      console.log('💾 Saving bundle:', bundleName);
+      const bundleId = isEditing && editingBundle ? editingBundle.id : `bundle_${Date.now()}`;
+      console.log('💾 Saving bundle:', bundleName, isEditing ? '(editing)' : '(creating new)', 'ID:', bundleId);
 
       const bundle: RoutineBundle = {
-        id: isEditing ? editingBundle.id : `bundle_${Date.now()}`,
+        id: bundleId,
         name: bundleName.trim(),
         description: bundleDescription.trim(),
         routineSchedule,
         isDefault: setAsDefault,
-        createdAt: isEditing ? editingBundle.createdAt : new Date(),
+        createdAt: isEditing && editingBundle ? editingBundle.createdAt : new Date(),
         lastModified: new Date(),
       };
 
       await storageService.saveRoutineBundle(bundle);
+      await loadData(); // Reload to update UI
 
-      console.log('✅ Bundle saved successfully');
+      console.log('✅ Bundle saved successfully:', isEditing ? 'Updated existing' : 'Created new');
       Alert.alert(
         'Success',
-        `Bundle "${bundleName}" ${isEditing ? 'updated' : 'created'} successfully!${setAsDefault ? ' Set as default schedule.' : ''}`,
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
+        `Schedule "${bundleName}" ${isEditing ? 'updated' : 'created'} successfully!${setAsDefault ? ' Set as default schedule.' : ''}`,
+        [{ text: 'OK', onPress: () => {
+          setMode('list');
+          setEditingBundle(null);
+        }}]
       );
     } catch (error) {
       console.error('❌ Error saving bundle:', error);
-      Alert.alert('Error', 'Failed to save bundle. Please try again.');
+      Alert.alert('Error', 'Failed to save schedule. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -163,12 +269,139 @@ export default function BundleManagerScreen({ navigation, route }: Props) {
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4CAF50" />
-          <Text style={styles.loadingText}>Loading routines...</Text>
+          <Text style={styles.loadingText}>Loading schedules...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
+  // Bundle List Mode
+  if (mode === 'list') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Workout Schedules</Text>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={createNewBundle}
+          >
+            <Ionicons name="add" size={24} color="#4CAF50" />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {bundles.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="calendar" size={64} color="#ccc" />
+              <Text style={styles.emptyStateTitle}>No Workout Schedules</Text>
+              <Text style={styles.emptyStateSubtitle}>
+                Create your first weekly workout schedule to organize your training
+              </Text>
+              <TouchableOpacity style={styles.createFirstButton} onPress={createNewBundle}>
+                <Text style={styles.createFirstButtonText}>Create Schedule</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            bundles.map((bundle) => {
+              const stats = getBundleStats(bundle);
+              return (
+                <View key={bundle.id} style={styles.bundleCard}>
+                  <View style={styles.bundleHeader}>
+                    <View style={styles.bundleInfo}>
+                      <View style={styles.bundleTitleRow}>
+                        <Text style={styles.bundleName}>{bundle.name}</Text>
+                        {bundle.isDefault && (
+                          <View style={styles.defaultBadge}>
+                            <Text style={styles.defaultBadgeText}>DEFAULT</Text>
+                          </View>
+                        )}
+                      </View>
+                      {bundle.description ? (
+                        <Text style={styles.bundleDescription} numberOfLines={2}>
+                          {bundle.description}
+                        </Text>
+                      ) : null}
+                      <View style={styles.bundleStatsRow}>
+                        <Text style={styles.bundleStat}>
+                          {stats.workoutDays} workout days
+                        </Text>
+                        <Text style={styles.bundleStat}>•</Text>
+                        <Text style={styles.bundleStat}>
+                          ~{Math.round(stats.totalEstimatedTime / 60 * 10) / 10}h/week
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.bundleActions}>
+                      {!bundle.isDefault && (
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={() => setDefaultBundle(bundle.id)}
+                        >
+                          <Ionicons name="star-outline" size={20} color="#4CAF50" />
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity
+                        style={styles.actionButton}
+                        onPress={() => editBundle(bundle)}
+                      >
+                        <Ionicons name="pencil" size={20} color="#666" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.actionButton}
+                        onPress={() => deleteBundle(bundle)}
+                      >
+                        <Ionicons name="trash" size={20} color="#f44336" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Weekly Preview */}
+                  <View style={styles.weeklyPreview}>
+                    {DAYS_OF_WEEK.map((day) => {
+                      const routineId = bundle.routineSchedule[day.key];
+                      const routine = routineId ? availableRoutines.find(r => r.id === routineId) : null;
+                      const isRestDay = !routineId;
+
+                      return (
+                        <View key={day.key} style={styles.previewDay}>
+                          <Text style={styles.previewDayLabel}>{day.short}</Text>
+                          <View style={[
+                            styles.previewDayContent,
+                            isRestDay && styles.previewRestDay
+                          ]}>
+                            {isRestDay ? (
+                              <Text style={styles.previewRestText}>Rest</Text>
+                            ) : (
+                              <>
+                                <Text style={styles.previewRoutineName} numberOfLines={2}>
+                                  {routine?.name || 'Unknown'}
+                                </Text>
+                                <Text style={styles.previewDuration}>
+                                  {routine?.estimatedDuration || 0}min
+                                </Text>
+                              </>
+                            )}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // Create/Edit Mode (existing functionality)
   const stats = getScheduleStats();
 
   return (
@@ -176,12 +409,12 @@ export default function BundleManagerScreen({ navigation, route }: Props) {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.goBack()}
+          onPress={cancelEdit}
         >
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.title}>
-          {isEditing ? 'Edit Bundle' : 'Create Bundle'}
+          {isEditing ? 'Edit Schedule' : 'Create Schedule'}
         </Text>
         <TouchableOpacity
           style={[styles.saveButton, saving && styles.saveButtonDisabled]}
@@ -199,7 +432,7 @@ export default function BundleManagerScreen({ navigation, route }: Props) {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Bundle Info Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Bundle Information</Text>
+          <Text style={styles.sectionTitle}>Schedule Information</Text>
           
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Name *</Text>
@@ -232,7 +465,7 @@ export default function BundleManagerScreen({ navigation, route }: Props) {
             <View style={styles.defaultToggleInfo}>
               <Text style={styles.defaultToggleTitle}>Set as Default Schedule</Text>
               <Text style={styles.defaultToggleSubtitle}>
-                Use this bundle to suggest today's workouts
+                Use this schedule to suggest today's workouts
               </Text>
             </View>
             <View style={[styles.checkbox, setAsDefault && styles.checkboxChecked]}>
@@ -246,7 +479,7 @@ export default function BundleManagerScreen({ navigation, route }: Props) {
               <Text style={styles.statLabel}>Workout Days</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{stats.restDays}</Text>
+              <Text style={styles.statValue}>{7 - stats.workoutDays}</Text>
               <Text style={styles.statLabel}>Rest Days</Text>
             </View>
             <View style={styles.statItem}>
@@ -366,39 +599,50 @@ export default function BundleManagerScreen({ navigation, route }: Props) {
               </TouchableOpacity>
 
               {/* Available Routines */}
-              {availableRoutines.map((routine) => (
-                <TouchableOpacity
-                  key={routine.id}
-                  style={[
-                    styles.routineOption,
-                    routineSchedule[selectedDay] === routine.id && styles.routineOptionSelected
-                  ]}
-                  onPress={() => assignRoutine(routine.id)}
-                >
+              {availableRoutines.length === 0 ? (
+                <View style={styles.routineOption}>
                   <View style={styles.routineOptionInfo}>
-                    <Text style={styles.routineOptionName}>{routine.name}</Text>
-                    <Text style={styles.routineOptionDescription} numberOfLines={2}>
-                      {routine.description || `${routine.exercises.length} exercises`}
+                    <Text style={styles.routineOptionName}>No Routines Available</Text>
+                    <Text style={styles.routineOptionDescription}>
+                      Create a routine first to assign it to this day
                     </Text>
-                    <View style={styles.routineOptionMeta}>
-                      <Text style={styles.routineOptionDuration}>
-                        ~{routine.estimatedDuration}min
+                  </View>
+                </View>
+              ) : (
+                availableRoutines.map((routine) => (
+                  <TouchableOpacity
+                    key={routine.id}
+                    style={[
+                      styles.routineOption,
+                      routineSchedule[selectedDay] === routine.id && styles.routineOptionSelected
+                    ]}
+                    onPress={() => assignRoutine(routine.id)}
+                  >
+                    <View style={styles.routineOptionInfo}>
+                      <Text style={styles.routineOptionName}>{routine.name}</Text>
+                      <Text style={styles.routineOptionDescription} numberOfLines={2}>
+                        {routine.description || `${routine.exercises.length} exercises`}
                       </Text>
-                      <Text style={styles.routineOptionDifficulty}>
-                        {routine.difficulty}
-                      </Text>
-                      {routine.isCustom && (
-                        <Text style={styles.customBadge}>Custom</Text>
+                      <View style={styles.routineOptionMeta}>
+                        <Text style={styles.routineOptionDuration}>
+                          ~{routine.estimatedDuration}min
+                        </Text>
+                        <Text style={styles.routineOptionDifficulty}>
+                          {routine.difficulty}
+                        </Text>
+                        {routine.isCustom && (
+                          <Text style={styles.customBadge}>Custom</Text>
+                        )}
+                      </View>
+                    </View>
+                    <View style={styles.routineOptionActions}>
+                      {routineSchedule[selectedDay] === routine.id && (
+                        <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
                       )}
                     </View>
-                  </View>
-                  <View style={styles.routineOptionActions}>
-                    {routineSchedule[selectedDay] === routine.id && (
-                      <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
-                    )}
-                  </View>
-                </TouchableOpacity>
-              ))}
+                  </TouchableOpacity>
+                ))
+              )}
             </ScrollView>
           </View>
         </View>
@@ -440,6 +684,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
   },
+  addButton: {
+    padding: 8,
+  },
   saveButton: {
     backgroundColor: '#4CAF50',
     paddingHorizontal: 16,
@@ -458,6 +705,112 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  // Empty state styles
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 80,
+    paddingHorizontal: 32,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  emptyStateSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 8,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  createFirstButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 24,
+  },
+  createFirstButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Bundle card styles
+  bundleCard: {
+    backgroundColor: 'white',
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  bundleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  bundleInfo: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  bundleTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  bundleName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginRight: 8,
+  },
+  defaultBadge: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  defaultBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  bundleDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+    lineHeight: 20,
+  },
+  bundleStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  bundleStat: {
+    fontSize: 12,
+    color: '#999',
+    marginRight: 8,
+  },
+  bundleActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionButton: {
+    padding: 8,
+    marginLeft: 4,
+  },
+  weeklyPreview: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   section: {
     backgroundColor: 'white',
@@ -634,72 +987,84 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   modalContent: {
     backgroundColor: 'white',
-    marginHorizontal: 20,
-    maxHeight: '80%',
     borderRadius: 16,
+    width: '100%',
+    height: '90%',
     overflow: 'hidden',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    padding: 24,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
+    backgroundColor: '#fafafa',
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '600',
     color: '#333',
     flex: 1,
+    paddingRight: 16,
   },
   modalCloseButton: {
-    padding: 8,
+    padding: 12,
   },
   modalBody: {
-    maxHeight: 400,
+    flex: 1,
+    paddingBottom: 20,
   },
   routineOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: 24,
     borderBottomWidth: 1,
     borderBottomColor: '#f8f9fa',
+    minHeight: 100,
+    backgroundColor: 'white',
   },
   routineOptionSelected: {
     backgroundColor: '#f0f8f0',
   },
   routineOptionInfo: {
     flex: 1,
+    paddingRight: 16,
   },
   routineOptionName: {
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 20,
+    fontWeight: '600',
     color: '#333',
+    marginBottom: 6,
   },
   routineOptionDescription: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#666',
-    marginTop: 2,
+    marginBottom: 8,
+    lineHeight: 20,
   },
   routineOptionMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 4,
+    flexWrap: 'wrap',
   },
   routineOptionDuration: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#4CAF50',
-    marginRight: 12,
+    marginRight: 16,
+    fontWeight: '600',
   },
   routineOptionDifficulty: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#666',
     textTransform: 'capitalize',
-    marginRight: 12,
+    marginRight: 16,
+    fontWeight: '500',
   },
   customBadge: {
     fontSize: 10,

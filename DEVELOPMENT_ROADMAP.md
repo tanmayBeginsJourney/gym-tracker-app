@@ -85,31 +85,37 @@
 
 **🎯 NEXT PRIORITY: Sprint 2.2 - Exercise Library Management**
 
-#### **📊 Sprint 2.2: Progress Analytics Foundation (4-5 days)**
+#### **📚 Sprint 2.2: Exercise Library Management (3-4 days)**
+**Problem**: Users can't add custom exercises or modify existing ones
+
+- [ ] **2.2.1** Build exercise creation interface
+- [ ] **2.2.2** Allow custom exercise categories and muscle groups
+- [ ] **2.2.3** Implement exercise editing and deletion
+- [ ] **2.2.4** Add exercise search and filtering capabilities
+- [ ] **2.2.5** Enable exercise instruction/notes editing
+- [ ] **2.2.6** Create exercise difficulty and equipment tagging
+
+**Success Criteria**:
+- Users can create custom exercises with all attributes
+- Exercise search and filtering works efficiently
+- Custom exercises integrate seamlessly with routine builder
+- Exercise management feels intuitive and complete
+
+#### **📊 Sprint 2.3: Progress Analytics Foundation (4-5 days)**
 **Problem**: Users have no way to see progress, trends, or improvements
 
-- [ ] **2.2.1** Implement Progress screen with basic strength charts
-- [ ] **2.2.2** Add personal record timeline and visualization
-- [ ] **2.2.3** Create workout frequency and consistency tracking
-- [ ] **2.2.4** Build exercise-specific progress charts (weight over time)
-- [ ] **2.2.5** Add volume tracking (total weight lifted per session)
-- [ ] **2.2.6** Implement basic statistics dashboard
+- [ ] **2.3.1** Implement Progress screen with basic strength charts
+- [ ] **2.3.2** Add personal record timeline and visualization
+- [ ] **2.3.3** Create workout frequency and consistency tracking
+- [ ] **2.3.4** Build exercise-specific progress charts (weight over time)
+- [ ] **2.3.5** Add volume tracking (total weight lifted per session)
+- [ ] **2.3.6** Implement basic statistics dashboard
 
 **Success Criteria**:
 - Users can see strength progression over time
 - Personal records clearly displayed with trends
 - Workout consistency metrics visible
 - Charts are responsive and performant
-
-#### **📚 Sprint 2.3: Exercise Library Management (3-4 days)**
-**Problem**: Users can't add custom exercises or modify existing ones
-
-- [ ] **2.3.1** Build exercise creation interface
-- [ ] **2.3.2** Allow custom exercise categories and muscle groups
-- [ ] **2.3.3** Implement exercise editing and deletion
-- [ ] **2.3.4** Add exercise search and filtering capabilities
-- [ ] **2.3.5** Enable exercise instruction/notes editing
-- [ ] **2.3.6** Create exercise difficulty and equipment tagging
 
 ---
 

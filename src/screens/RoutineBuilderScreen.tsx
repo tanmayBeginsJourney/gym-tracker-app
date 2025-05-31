@@ -384,29 +384,36 @@ export default function RoutineBuilderScreen({ navigation, route }: Props) {
             </View>
             
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {availableExercises.map((exercise) => (
-                <TouchableOpacity
-                  key={exercise.id}
-                  style={styles.exerciseOption}
-                  onPress={() => addExercise(exercise)}
-                >
-                  <View style={styles.exerciseOptionInfo}>
-                    <Text style={styles.exerciseOptionName}>{exercise.name}</Text>
-                    <Text style={styles.exerciseOptionCategory}>
-                      {exercise.category.charAt(0).toUpperCase() + exercise.category.slice(1)}
-                    </Text>
-                    <Text style={styles.exerciseOptionMuscles}>
-                      {exercise.muscleGroups.join(', ')}
-                    </Text>
-                  </View>
-                  <View style={styles.exerciseOptionMeta}>
-                    <View style={styles.difficultyBadge}>
-                      <Text style={styles.difficultyText}>{exercise.difficulty}</Text>
+              {availableExercises.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateText}>No exercises found</Text>
+                  <Text style={styles.emptyStateSubtext}>Please try again</Text>
+                </View>
+              ) : (
+                availableExercises.map((exercise) => (
+                  <TouchableOpacity
+                    key={exercise.id}
+                    style={styles.exerciseOption}
+                    onPress={() => addExercise(exercise)}
+                  >
+                    <View style={styles.exerciseOptionInfo}>
+                      <Text style={styles.exerciseOptionName}>{exercise.name}</Text>
+                      <Text style={styles.exerciseOptionCategory}>
+                        {exercise.category.charAt(0).toUpperCase() + exercise.category.slice(1)}
+                      </Text>
+                      <Text style={styles.exerciseOptionMuscles}>
+                        {exercise.muscleGroups.join(', ')}
+                      </Text>
                     </View>
-                    <Text style={styles.popularityText}>#{exercise.popularity}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
+                    <View style={styles.exerciseOptionMeta}>
+                      <View style={styles.difficultyBadge}>
+                        <Text style={styles.difficultyText}>{exercise.difficulty}</Text>
+                      </View>
+                      <Text style={styles.popularityText}>#{exercise.popularity}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))
+              )}
             </ScrollView>
           </View>
         </View>
@@ -636,59 +643,66 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   modalContent: {
     backgroundColor: 'white',
-    marginHorizontal: 20,
-    maxHeight: '80%',
     borderRadius: 16,
+    width: '100%',
+    height: '90%',
     overflow: 'hidden',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    padding: 24,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
+    backgroundColor: '#fafafa',
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '600',
     color: '#333',
   },
   modalCloseButton: {
-    padding: 8,
+    padding: 12,
   },
   modalBody: {
-    maxHeight: 400,
+    flex: 1,
+    paddingBottom: 20,
   },
   exerciseOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: 24,
     borderBottomWidth: 1,
     borderBottomColor: '#f8f9fa',
+    minHeight: 100,
+    backgroundColor: 'white',
   },
   exerciseOptionInfo: {
     flex: 1,
+    paddingRight: 16,
   },
   exerciseOptionName: {
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 20,
+    fontWeight: '600',
     color: '#333',
+    marginBottom: 6,
   },
   exerciseOptionCategory: {
-    fontSize: 12,
+    fontSize: 16,
     color: '#4CAF50',
-    marginTop: 2,
+    marginBottom: 4,
     textTransform: 'uppercase',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   exerciseOptionMuscles: {
-    fontSize: 12,
+    fontSize: 15,
     color: '#666',
-    marginTop: 2,
+    lineHeight: 20,
   },
   exerciseOptionMeta: {
     alignItems: 'flex-end',

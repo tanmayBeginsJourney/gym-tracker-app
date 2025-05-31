@@ -10,19 +10,27 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { UserProfile, Workout, WorkoutRoutine } from '../types';
+import { UserProfile, Workout, WorkoutRoutine, RoutineBundle } from '../types';
 import { storageService } from '../services/storage';
 import { defaultRoutines } from '../data/exercises';
+import ActiveWorkoutScreen from './ActiveWorkoutScreen';
+import WorkoutCompletionScreen from './WorkoutCompletionScreen';
 import type { RootStackParamList } from '../types';
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;
 
+type HomeState = 'dashboard' | 'active' | 'complete';
+
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
+  const [homeState, setHomeState] = useState<HomeState>('dashboard');
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [recentWorkouts, setRecentWorkouts] = useState<Workout[]>([]);
   const [totalWorkouts, setTotalWorkouts] = useState(0);
   const [todaysRoutine, setTodaysRoutine] = useState<WorkoutRoutine | null>(null);
+  const [defaultBundle, setDefaultBundle] = useState<RoutineBundle | null>(null);
+  const [selectedRoutine, setSelectedRoutine] = useState<WorkoutRoutine | null>(null);
+  const [completedWorkout, setCompletedWorkout] = useState<Workout | null>(null);
   const [loading, setLoading] = useState(true);
   const [streak, setStreak] = useState(0);
 
@@ -42,7 +50,48 @@ const HomeScreen: React.FC = () => {
 
   const loadDashboardData = async () => {
     try {
-      const profile = await storageService.getUserProfile();
+      let profile = await storageService.getUserProfile();
+      console.log('🏠 HomeScreen - Initial profile load:', profile);
+      
+      // Update profile name if it's not "Tanmay"
+      if (!profile || profile.name !== 'Tanmay') {
+        console.log('🏠 HomeScreen - Updating profile name to Tanmay...');
+        const updatedProfile: UserProfile = profile ? {
+          ...profile,
+          name: 'Tanmay'
+        } : {
+          id: 'user-1',
+          name: 'Tanmay',
+          age: 25,
+          weight: 70,
+          height: 175,
+          gender: 'male',
+          experienceLevel: 'intermediate',
+          goals: ['strength', 'muscle'],
+          createdAt: new Date(),
+          personalDetails: {
+            targetPhysique: 'lean_muscle',
+            bodyFatGoal: 12,
+            specificGoals: ['visible abs', 'vascularity', 'bigger shoulders'],
+            weakBodyParts: ['legs', 'back', 'forearms'],
+            priorityMuscles: ['quadriceps', 'lats', 'forearm flexors'],
+            preferredWorkoutStyle: 'bodybuilding',
+            workoutFrequency: 5,
+            sessionDuration: 75,
+            restDayPreferences: ['active recovery', 'light cardio'],
+            injuries: [],
+            allergies: [],
+            dietaryRestrictions: [],
+            motivationalFactors: ['progress photos', 'strength gains', 'compliments'],
+            personalChallenges: ['consistency', 'diet discipline'],
+            additionalNotes: 'Wants lean physique with good muscle definition. Struggles with leg development and back strength. Very motivated by visible progress.'
+          }
+        };
+        await storageService.saveUserProfile(updatedProfile);
+        profile = updatedProfile;
+        console.log('🏠 HomeScreen - Profile updated:', profile.name);
+      }
+      
       const allWorkouts = await storageService.getAllWorkouts();
       
       // Get last 3 workouts
@@ -54,6 +103,7 @@ const HomeScreen: React.FC = () => {
       const workoutStreak = calculateWorkoutStreak(allWorkouts);
 
       setUserProfile(profile);
+      console.log('🏠 HomeScreen - Profile set to state:', profile?.name);
       setRecentWorkouts(recent);
       setTotalWorkouts(allWorkouts.length);
       setStreak(workoutStreak);
@@ -66,6 +116,10 @@ const HomeScreen: React.FC = () => {
 
   const loadTodaysRoutine = async () => {
     try {
+      // Load default bundle
+      const bundle = await storageService.getDefaultRoutineBundle();
+      setDefaultBundle(bundle);
+
       // Initialize default routines if none exist
       const existingRoutines = await storageService.getAllRoutines();
       if (existingRoutines.length === 0) {
@@ -159,7 +213,35 @@ const HomeScreen: React.FC = () => {
       return;
     }
 
-    navigation.navigate('Workout');
+    // Start the workout directly using the same pattern as WorkoutScreen
+    setSelectedRoutine(todaysRoutine);
+    setHomeState('active');
+  };
+
+  const onWorkoutComplete = async (workout: Workout) => {
+    try {
+      // Save the workout
+      await storageService.saveWorkout(workout);
+      
+      // Update state
+      setCompletedWorkout(workout);
+      setHomeState('complete');
+      
+      // Reload dashboard data
+      await loadDashboardData();
+    } catch (error) {
+      console.error('Error saving workout:', error);
+    }
+  };
+
+  const onWorkoutCancel = () => {
+    setSelectedRoutine(null);
+    setHomeState('dashboard');
+  };
+
+  const onCompletionDismiss = () => {
+    setCompletedWorkout(null);
+    setHomeState('dashboard');
   };
 
   const navigateToWorkouts = () => {
@@ -168,6 +250,10 @@ const HomeScreen: React.FC = () => {
 
   const navigateToAI = () => {
     navigation.navigate('Chat');
+  };
+
+  const navigateToBundleManager = () => {
+    navigation.navigate('BundleManager', {});
   };
 
   const setupProfile = () => {
@@ -184,7 +270,7 @@ const HomeScreen: React.FC = () => {
   const createDemoProfile = async () => {
     const demoProfile: UserProfile = {
       id: 'user-1',
-      name: 'Fitness Enthusiast',
+      name: 'Tanmay',
       age: 25,
       weight: 70,
       height: 175,
@@ -240,6 +326,27 @@ const HomeScreen: React.FC = () => {
     );
   }
 
+  // Render active workout screen
+  if (homeState === 'active' && selectedRoutine) {
+    return (
+      <ActiveWorkoutScreen
+        routine={selectedRoutine}
+        onComplete={onWorkoutComplete}
+        onCancel={onWorkoutCancel}
+      />
+    );
+  }
+
+  // Render workout completion screen
+  if (homeState === 'complete' && completedWorkout) {
+    return (
+      <WorkoutCompletionScreen
+        workout={completedWorkout}
+        onDismiss={onCompletionDismiss}
+      />
+    );
+  }
+
   return (
     <ScrollView style={styles.container}>
       {/* Welcome Section */}
@@ -256,6 +363,31 @@ const HomeScreen: React.FC = () => {
           }
         </Text>
       </View>
+
+      {/* Bundle Status */}
+      {defaultBundle ? (
+        <View style={styles.bundleStatus}>
+          <View style={styles.bundleInfo}>
+            <Ionicons name="calendar-outline" size={16} color="#4CAF50" />
+            <Text style={styles.bundleText}>
+              Active Schedule: <Text style={styles.bundleName}>{defaultBundle.name}</Text>
+            </Text>
+          </View>
+          <TouchableOpacity onPress={navigateToBundleManager}>
+            <Ionicons name="chevron-forward" size={16} color="#666" />
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.noBundlePrompt}>
+          <Text style={styles.noBundleText}>No workout schedule set</Text>
+          <TouchableOpacity 
+            style={styles.setBundleButton}
+            onPress={navigateToBundleManager}
+          >
+            <Text style={styles.setBundleButtonText}>Create Schedule</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Today's Workout Hero Section */}
       {todaysRoutine ? (
@@ -409,43 +541,98 @@ const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f7fafc',
+    backgroundColor: '#f8f9fa',
+    paddingTop: 50,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f7fafc',
   },
   loadingText: {
-    fontSize: 18,
-    color: '#4a5568',
+    fontSize: 16,
+    color: '#666',
   },
   welcomeSection: {
-    padding: 20,
-    backgroundColor: '#ffffff',
-    marginBottom: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
   },
   welcomeText: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#1a365d',
+    color: '#1a202c',
     marginBottom: 8,
   },
   subtitleText: {
     fontSize: 16,
     color: '#4a5568',
   },
-  
-  // Workout Hero Card Styles
+  bundleStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#e6ffe6',
+    marginHorizontal: 20,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+  },
+  bundleInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  bundleText: {
+    fontSize: 14,
+    color: '#333',
+    marginLeft: 8,
+  },
+  bundleName: {
+    fontWeight: '600',
+    color: '#4CAF50',
+  },
+  noBundlePrompt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff3cd',
+    marginHorizontal: 20,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ff9800',
+  },
+  noBundleText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+    marginRight: 12,
+  },
+  setBundleButton: {
+    backgroundColor: '#ff9800',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  setBundleButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   workoutHeroCard: {
-    backgroundColor: '#3182ce',
-    margin: 16,
+    backgroundColor: '#667eea', // Gradient fallback
+    marginHorizontal: 20,
+    marginBottom: 20,
     padding: 24,
     borderRadius: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 8,
   },
@@ -455,25 +642,26 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   workoutHeroTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#ffffff',
-    marginLeft: 12,
+    marginLeft: 8,
+    letterSpacing: 0.5,
   },
   workoutHeroName: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#ffffff',
-    marginBottom: 16,
+    marginBottom: 8,
   },
   workoutHeroDetails: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     marginBottom: 12,
   },
   workoutHeroDetail: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginRight: 16,
   },
   workoutHeroDetailText: {
     fontSize: 14,
@@ -481,20 +669,23 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   workoutHeroDescription: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#e2e8f0',
-    lineHeight: 20,
+    lineHeight: 22,
   },
-  
-  // Rest Day Card Styles
   restDayCard: {
     backgroundColor: '#ffffff',
-    margin: 16,
+    marginHorizontal: 20,
+    marginBottom: 20,
     padding: 24,
     borderRadius: 16,
-    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
     borderColor: '#e2e8f0',
-    alignItems: 'center',
   },
   restDayHeader: {
     flexDirection: 'row',
@@ -505,83 +696,89 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#4a5568',
-    marginLeft: 12,
+    marginLeft: 8,
   },
   restDayText: {
     fontSize: 16,
-    color: '#4a5568',
-    textAlign: 'center',
-    marginBottom: 16,
+    color: '#718096',
     lineHeight: 22,
+    marginBottom: 16,
   },
   restDayButtons: {
-    flexDirection: 'column',
-    alignItems: 'center',
-  },
-  restDayButtonChild: {
-    marginBottom: 12,
+    gap: 12,
   },
   customWorkoutButton: {
     backgroundColor: '#3182ce',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    justifyContent: 'center',
     paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 8,
+  },
+  restDayButtonChild: {
     marginBottom: 8,
   },
   customWorkoutText: {
     color: '#ffffff',
-    fontWeight: 'bold',
     fontSize: 16,
+    fontWeight: '600',
     marginLeft: 8,
   },
   browseRoutinesButton: {
-    backgroundColor: '#e2e8f0',
-    paddingHorizontal: 20,
+    backgroundColor: '#f7fafc',
     paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
   },
   browseRoutinesText: {
     color: '#4a5568',
-    fontWeight: 'bold',
     fontSize: 16,
+    fontWeight: '500',
   },
-
   setupCard: {
     backgroundColor: '#ffffff',
-    margin: 16,
+    marginHorizontal: 20,
+    marginBottom: 20,
     padding: 20,
     borderRadius: 12,
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-    borderStyle: 'dashed',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   setupTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a365d',
-    marginTop: 8,
+    color: '#1a202c',
+    marginLeft: 12,
     marginBottom: 4,
   },
   setupText: {
     fontSize: 14,
     color: '#4a5568',
-    textAlign: 'center',
+    marginLeft: 12,
   },
   statsSection: {
-    padding: 16,
+    paddingHorizontal: 20,
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1a365d',
+    color: '#1a202c',
     marginBottom: 16,
   },
   statsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    paddingHorizontal: 8,
   },
   statCard: {
     backgroundColor: '#ffffff',
@@ -589,47 +786,43 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     flex: 1,
-    marginHorizontal: 4,
+    marginHorizontal: 8,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 3,
+    shadowRadius: 4,
     elevation: 3,
   },
   statNumber: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1a365d',
+    color: '#1a202c',
     marginTop: 8,
   },
   statLabel: {
     fontSize: 12,
-    color: '#4a5568',
+    color: '#718096',
     marginTop: 4,
     textAlign: 'center',
   },
   workoutsSection: {
-    padding: 16,
+    paddingHorizontal: 20,
+    marginBottom: 24,
   },
   emptyState: {
-    backgroundColor: '#ffffff',
-    padding: 40,
-    borderRadius: 12,
     alignItems: 'center',
+    paddingVertical: 32,
   },
   emptyStateText: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '500',
     color: '#4a5568',
-    marginTop: 16,
+    marginTop: 12,
   },
   emptyStateSubtext: {
     fontSize: 14,
     color: '#718096',
-    marginTop: 8,
+    marginTop: 4,
     textAlign: 'center',
   },
   workoutCard: {
@@ -638,61 +831,54 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 3,
+    shadowRadius: 4,
     elevation: 3,
   },
   workoutHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 8,
   },
   workoutDate: {
     fontSize: 14,
-    color: '#4a5568',
+    color: '#718096',
   },
   workoutDuration: {
     fontSize: 14,
-    color: '#3182ce',
-    fontWeight: 'bold',
+    color: '#718096',
   },
   workoutName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1a365d',
+    color: '#1a202c',
     marginBottom: 4,
   },
   workoutExercises: {
     fontSize: 14,
-    color: '#718096',
+    color: '#4a5568',
   },
   actionsSection: {
-    padding: 16,
-    paddingBottom: 32,
+    paddingHorizontal: 20,
+    marginBottom: 40,
   },
   actionGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    paddingHorizontal: 8,
   },
   actionCard: {
     backgroundColor: '#ffffff',
-    padding: 16,
+    padding: 20,
     borderRadius: 12,
     alignItems: 'center',
     flex: 1,
-    marginHorizontal: 4,
+    marginHorizontal: 8,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 3,
+    shadowRadius: 4,
     elevation: 3,
   },
   actionText: {

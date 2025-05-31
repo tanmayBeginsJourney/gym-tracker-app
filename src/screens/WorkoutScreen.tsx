@@ -100,6 +100,15 @@ const WorkoutScreen: React.FC<Props> = ({ navigation }) => {
     };
   }, [loadData]);
 
+  // Refresh data when screen comes into focus (after creating routines/bundles)
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadData();
+    });
+
+    return unsubscribe;
+  }, [navigation, loadData]);
+
   const getFallbackTodaysRoutine = (routines: WorkoutRoutine[]): WorkoutRoutine | null => {
     const dayOfWeek = new Date().getDay();
     
@@ -331,25 +340,21 @@ const WorkoutScreen: React.FC<Props> = ({ navigation }) => {
         {/* Quick Actions */}
         <View style={styles.quickActionsSection}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.quickActions}>
+          <View style={styles.quickActionsGrid}>
             <TouchableOpacity 
-              style={styles.quickAction}
+              style={styles.quickActionCard}
               onPress={navigateToRoutineBuilder}
             >
-              <View style={styles.quickActionIcon}>
-                <Ionicons name="fitness" size={24} color="#4CAF50" />
-              </View>
+              <Ionicons name="fitness" size={32} color="#4CAF50" />
               <Text style={styles.quickActionTitle}>Create Routine</Text>
               <Text style={styles.quickActionSubtitle}>Build custom workout</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.quickAction}
+              style={styles.quickActionCard}
               onPress={navigateToBundleManager}
             >
-              <View style={styles.quickActionIcon}>
-                <Ionicons name="calendar" size={24} color="#4CAF50" />
-              </View>
+              <Ionicons name="calendar" size={32} color="#4CAF50" />
               <Text style={styles.quickActionTitle}>Schedule</Text>
               <Text style={styles.quickActionSubtitle}>Plan weekly workouts</Text>
             </TouchableOpacity>
@@ -370,14 +375,18 @@ const WorkoutScreen: React.FC<Props> = ({ navigation }) => {
                   onPress={() => startWorkout(routine)}
                 >
                   <View style={styles.routineHeader}>
-                    <Text style={styles.routineName}>{routine.name}</Text>
-                    <View style={styles.customBadge}>
-                      <Text style={styles.customBadgeText}>Custom</Text>
+                    <View style={styles.routineTitleSection}>
+                      <Text style={styles.routineName}>{routine.name}</Text>
+                      <View style={styles.customBadge}>
+                        <Text style={styles.customBadgeText}>Custom</Text>
+                      </View>
                     </View>
                   </View>
-                  <Text style={styles.routineDescription} numberOfLines={2}>
-                    {routine.description || `${routine.exercises.length} exercises`}
-                  </Text>
+                  {routine.description && (
+                    <Text style={styles.routineDescription} numberOfLines={2}>
+                      {routine.description}
+                    </Text>
+                  )}
                   <View style={styles.routineDetails}>
                     <View style={styles.routineDetail}>
                       <Ionicons name="barbell" size={14} color="#666" />
@@ -525,10 +534,12 @@ const styles = StyleSheet.create({
   header: {
     padding: 20,
     backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flex: 1,
   },
   headerTitle: {
     fontSize: 28,
@@ -539,13 +550,16 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 16,
     color: '#4a5568',
+    flexShrink: 1,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginLeft: 16,
   },
   headerButton: {
     padding: 8,
+    marginLeft: 8,
   },
   
   // Bundle Status
@@ -679,6 +693,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#1a365d',
+    marginBottom: 16,
   },
   sectionCount: {
     fontSize: 14,
@@ -696,9 +711,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   routineMain: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flex: 1,
   },
   routineHeader: {
     flexDirection: 'row',
@@ -706,17 +719,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
+  routineTitleSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
   routineName: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1a365d',
     flex: 1,
   },
+  customBadge: {
+    backgroundColor: '#3182ce',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  customBadgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
   routineDescription: {
     fontSize: 14,
     color: '#4a5568',
-    marginBottom: 12,
-    lineHeight: 20,
+    marginBottom: 8,
+    lineHeight: 18,
   },
   routineDetails: {
     flexDirection: 'row',
@@ -732,17 +763,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#4a5568',
     marginLeft: 4,
-  },
-  customBadge: {
-    backgroundColor: '#3182ce',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  customBadgeText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#ffffff',
   },
   
   // Recent Section
@@ -794,33 +814,40 @@ const styles = StyleSheet.create({
   quickActionsSection: {
     padding: 16,
   },
-  quickActions: {
+  quickActionsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: 16,
   },
-  quickAction: {
+  quickActionCard: {
     flexDirection: 'column',
     alignItems: 'center',
-    padding: 16,
     backgroundColor: '#ffffff',
+    padding: 20,
     borderRadius: 12,
+    flex: 1,
+    marginHorizontal: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-  },
-  quickActionIcon: {
-    marginBottom: 8,
+    minHeight: 120,
+    justifyContent: 'center',
   },
   quickActionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1a365d',
+    marginTop: 8,
+    textAlign: 'center',
+    lineHeight: 22,
   },
   quickActionSubtitle: {
     fontSize: 14,
     color: '#4a5568',
+    textAlign: 'center',
+    marginTop: 4,
   },
   difficultyBadge: {
     paddingHorizontal: 8,

@@ -58,21 +58,34 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
   }, [isResting, restTimer]);
 
   const initializeWorkout = async () => {
-    // Initialize workout exercises with empty sets
-    const exercises: WorkoutExercise[] = routine.exercises.map(ex => ({
+    console.log('🏋️ Initializing workout:', routine.name);
+    console.log('📋 Routine exercises:', routine.exercises.length);
+    
+    const firstExercise = routine.exercises[0];
+    if (firstExercise) {
+      console.log('🎯 First exercise:', firstExercise.exerciseName, 'Sets:', firstExercise.plannedSets, 'Reps:', firstExercise.plannedReps);
+    }
+    
+    setCurrentExerciseIndex(0);
+    setCurrentSets([]);
+    setCurrentSetIndex(0);
+    
+    // Initialize workout exercises array
+    const initialExercises: WorkoutExercise[] = routine.exercises.map(ex => ({
       exerciseId: ex.exerciseId,
       exerciseName: ex.exerciseName,
       sets: [],
       notes: ''
     }));
-    setWorkoutExercises(exercises);
-
-    // Load previous performance for smart defaults
+    setWorkoutExercises(initialExercises);
+    
+    // Load defaults for first exercise
     await loadPreviousPerformance();
   };
 
   const loadPreviousPerformance = async () => {
     try {
+      console.log('📊 Loading previous performance for exercise:', currentExercise.exerciseName);
       const allWorkouts = await storageService.getAllWorkouts();
       const recentWorkouts = allWorkouts
         .filter(w => w.exercises.some(e => e.exerciseId === currentExercise.exerciseId))
@@ -84,19 +97,26 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
         if (lastExercise && lastExercise.sets.length > 0) {
           const lastSet = lastExercise.sets[lastExercise.sets.length - 1];
           // Pre-fill with last performance
-          setTempWeight(lastSet.weight.toString());
-          setTempReps(lastSet.reps.toString());
+          setTempWeight(lastSet.weight?.toString() || '20');
+          setTempReps(lastSet.reps?.toString() || '10');
+          console.log('✅ Loaded previous performance:', lastSet.weight, 'kg x', lastSet.reps, 'reps');
         }
       } else {
         // Use routine defaults
-        setTempWeight(currentExercise.targetWeight?.toString() || '20');
-        setTempReps(currentExercise.targetReps.toString());
+        const defaultWeight = currentExercise.plannedWeight?.toString() || '20';
+        const defaultReps = currentExercise.plannedReps?.toString() || '10';
+        setTempWeight(defaultWeight);
+        setTempReps(defaultReps);
+        console.log('📝 Using routine defaults:', defaultWeight, 'kg x', defaultReps, 'reps');
       }
     } catch (error) {
-      console.error('Error loading previous performance:', error);
-      // Fallback to routine defaults
-      setTempWeight(currentExercise.targetWeight?.toString() || '20');
-      setTempReps(currentExercise.targetReps.toString());
+      console.error('❌ Error loading previous performance:', error);
+      // Fallback to safe defaults
+      const safeWeight = currentExercise.plannedWeight?.toString() || '20';
+      const safeReps = currentExercise.plannedReps?.toString() || '10';
+      setTempWeight(safeWeight);
+      setTempReps(safeReps);
+      console.log('🔧 Using fallback defaults:', safeWeight, 'kg x', safeReps, 'reps');
     }
   };
 
@@ -122,6 +142,7 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
     }
 
     const newSet: WorkoutSet = {
+      setNumber: currentSets.length + 1,
       reps,
       weight,
       completed: true,
@@ -149,7 +170,7 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
     Vibration.vibrate(100);
 
     // Check if exercise is complete
-    const targetSets = currentExercise.targetSets;
+    const targetSets = currentExercise.plannedSets;
     const completedSets = updatedExercises[currentExerciseIndex].sets.length;
 
     if (completedSets >= targetSets) {
@@ -286,7 +307,8 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
 
   const getCurrentSetText = () => {
     const completedSets = currentSets.length;
-    const targetSets = currentExercise?.targetSets || 0;
+    const targetSets = currentExercise?.plannedSets || 3; // Default to 3 sets if not specified
+    console.log('📊 Set progress:', completedSets, 'completed,', targetSets, 'planned');
     return `Set ${completedSets + 1} of ${targetSets}`;
   };
 
