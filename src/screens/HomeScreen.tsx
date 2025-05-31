@@ -16,12 +16,13 @@ import { defaultRoutines } from '../data/exercises';
 import ActiveWorkoutScreen from './ActiveWorkoutScreen';
 import WorkoutCompletionScreen from './WorkoutCompletionScreen';
 import type { RootStackParamList } from '../types';
+import Constants from 'expo-constants';
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;
 
 // Environment-based configuration for demo vs production
-const DEFAULT_USER_NAME = process.env.DEFAULT_USER_NAME || 'Fitness Enthusiast';
-const IS_DEMO_MODE = process.env.NODE_ENV === 'development' || process.env.DEMO_MODE === 'true';
+const { DEFAULT_USER_NAME = 'Fitness Enthusiast', DEMO_MODE } = Constants.manifest?.extra ?? {};
+const IS_DEMO_MODE = __DEV__ || DEMO_MODE === 'true';
 
 type HomeState = 'dashboard' | 'active' | 'complete';
 
@@ -713,7 +714,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   restDayButtons: {
-    gap: 12,
+    flexDirection: 'column',
   },
   customWorkoutButton: {
     backgroundColor: '#3182ce',

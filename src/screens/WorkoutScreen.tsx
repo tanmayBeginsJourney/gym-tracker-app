@@ -817,7 +817,6 @@ const styles = StyleSheet.create({
   quickActionsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 16,
   },
   quickActionCard: {
     flexDirection: 'column',
@@ -826,7 +825,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 12,
     flex: 1,
-    marginHorizontal: 4,
+    marginHorizontal: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
