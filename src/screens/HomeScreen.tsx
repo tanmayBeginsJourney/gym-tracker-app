@@ -9,12 +9,16 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { UserProfile, Workout, WorkoutRoutine } from '../types';
 import { storageService } from '../services/storage';
-import { Workout, UserProfile, WorkoutRoutine } from '../types';
 import { defaultRoutines } from '../data/exercises';
+import type { RootStackParamList } from '../types';
+
+type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;
 
 const HomeScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<HomeScreenNavigationProp>();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [recentWorkouts, setRecentWorkouts] = useState<Workout[]>([]);
   const [totalWorkouts, setTotalWorkouts] = useState(0);
@@ -70,22 +74,30 @@ const HomeScreen: React.FC = () => {
         }
       }
 
-      // Get today's routine based on day of week
-      const routine = getTodaysRoutine();
+      // First, try to get routine from default bundle system
+      const todaysRoutineFromBundle = await storageService.getTodaysRoutine();
+      if (todaysRoutineFromBundle) {
+        setTodaysRoutine(todaysRoutineFromBundle);
+        return;
+      }
+
+      // Fallback: Use simple day-based scheduling with all available routines
+      const allRoutines = await storageService.getAllRoutines();
+      const routine = getFallbackTodaysRoutine(allRoutines);
       setTodaysRoutine(routine);
     } catch (error) {
       console.error('Error loading today\'s routine:', error);
     }
   };
 
-  const getTodaysRoutine = (): WorkoutRoutine | null => {
+  const getFallbackTodaysRoutine = (allRoutines: WorkoutRoutine[]): WorkoutRoutine | null => {
     const dayOfWeek = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
     
     // Simple scheduling: Push day on Monday/Thursday, Full body on Wednesday/Saturday
     if (dayOfWeek === 1 || dayOfWeek === 4) { // Monday or Thursday
-      return defaultRoutines.find(r => r.id === 'push-day') || null;
+      return allRoutines.find(r => r.id === 'push-day') || null;
     } else if (dayOfWeek === 3 || dayOfWeek === 6) { // Wednesday or Saturday
-      return defaultRoutines.find(r => r.id === 'beginner-full-body') || null;
+      return allRoutines.find(r => r.id === 'beginner-full-body') || null;
     }
     
     return null; // Rest days: Tuesday, Friday, Sunday
@@ -141,21 +153,21 @@ const HomeScreen: React.FC = () => {
         'Would you like to browse available routines?',
         [
           { text: 'Later', style: 'cancel' },
-          { text: 'Browse Routines', onPress: () => navigation.navigate('Workout' as never) }
+          { text: 'Browse Routines', onPress: () => navigation.navigate('Workout') }
         ]
       );
       return;
     }
 
-    navigation.navigate('Workout' as never);
+    navigation.navigate('Workout');
   };
 
   const navigateToWorkouts = () => {
-    navigation.navigate('Workout' as never);
+    navigation.navigate('Workout');
   };
 
   const navigateToAI = () => {
-    navigation.navigate('Chat' as never);
+    navigation.navigate('Chat');
   };
 
   const setupProfile = () => {
@@ -288,7 +300,7 @@ const HomeScreen: React.FC = () => {
           </Text>
           <View style={styles.restDayButtons}>
             <TouchableOpacity 
-              style={styles.customWorkoutButton} 
+              style={[styles.customWorkoutButton, styles.restDayButtonChild]} 
               onPress={navigateToWorkouts}
             >
               <Ionicons name="fitness" size={20} color="#ffffff" />
@@ -505,7 +517,9 @@ const styles = StyleSheet.create({
   restDayButtons: {
     flexDirection: 'column',
     alignItems: 'center',
-    gap: 12,
+  },
+  restDayButtonChild: {
+    marginBottom: 12,
   },
   customWorkoutButton: {
     backgroundColor: '#3182ce',

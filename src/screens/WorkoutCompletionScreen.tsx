@@ -297,7 +297,7 @@ const WorkoutCompletionScreen: React.FC<Props> = ({ workout, onDismiss }) => {
 
         {/* Actions */}
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.shareButton}>
+          <TouchableOpacity style={[styles.shareButton, styles.actionsChild]}>
             <Ionicons name="share-social" size={20} color="#3182ce" />
             <Text style={styles.shareButtonText}>Share Progress</Text>
           </TouchableOpacity>
@@ -469,7 +469,9 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     padding: 16,
-    gap: 12,
+  },
+  actionsChild: {
+    marginRight: 12,
   },
   shareButton: {
     flex: 1,

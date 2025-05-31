@@ -14,7 +14,7 @@ const AI_CONFIG = {
   
   // Option 3: Hugging Face (Current fallback)
   HF_URL: 'https://api-inference.huggingface.co/models/microsoft/DialoGPT-large',
-  HF_KEY: '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',
+  HF_KEY: process.env.HF_KEY || 'your-hf-token-here', // Move to environment variable
   
   // AI Provider Priority (will try in this order)
   PROVIDER_PRIORITY: ['ollama', 'openai', 'huggingface'] as const
@@ -507,7 +507,7 @@ Your role is to provide personalized, actionable fitness advice. Remember their 
     const now = new Date();
     const hour = now.getHours();
     const dayOfWeek = now.getDay();
-    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     
     let timeOfDay = 'morning';
     if (hour >= 12 && hour < 17) timeOfDay = 'afternoon';
@@ -547,6 +547,8 @@ Your role is to provide personalized, actionable fitness advice. Remember their 
   // Clear conversation history
   async clearConversationHistory(): Promise<void> {
     this.conversationHistory = [];
+    // Also clear persistent storage to keep UI/state consistent
+    await storageService.clearChatHistory();
   }
 }
 

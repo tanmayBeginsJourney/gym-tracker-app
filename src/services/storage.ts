@@ -364,6 +364,7 @@ class StorageService {
       nutrition: await this.getAllNutrition(),
       exercises: await this.getAllExercises(),
       routines: await this.getAllRoutines(),
+      routineBundles: await this.getAllRoutineBundles(),
       chatHistory: await this.getChatHistory(),
       progress: await this.getAllProgress(),
     };
@@ -380,6 +381,7 @@ class StorageService {
       if (data.nutrition) await this.setItem(STORAGE_KEYS.NUTRITION, data.nutrition);
       if (data.exercises) await this.saveExercises(data.exercises);
       if (data.routines) await this.setItem(STORAGE_KEYS.ROUTINES, data.routines);
+      if (data.routineBundles) await this.setItem(STORAGE_KEYS.ROUTINE_BUNDLES, data.routineBundles);
       if (data.chatHistory) await this.setItem(STORAGE_KEYS.CHAT_HISTORY, data.chatHistory);
       if (data.progress) await this.setItem(STORAGE_KEYS.PROGRESS, data.progress);
     } catch (error) {

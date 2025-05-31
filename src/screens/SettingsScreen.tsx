@@ -10,10 +10,14 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { storageService } from '../services/storage';
+import type { RootStackParamList } from '../types';
+
+type SettingsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Settings'>;
 
 const SettingsScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<SettingsScreenNavigationProp>();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [autoBackup, setAutoBackup] = useState(false);
 
@@ -36,7 +40,7 @@ const SettingsScreen: React.FC = () => {
                   text: 'OK', 
                   onPress: () => {
                     // Navigate to home to refresh data
-                    navigation.navigate('Home' as never);
+                    navigation.navigate('Home');
                   }
                 }]
               );
@@ -69,7 +73,7 @@ const SettingsScreen: React.FC = () => {
                   text: 'OK', 
                   onPress: () => {
                     // Navigate to chat to see cleared history
-                    navigation.navigate('Chat' as never);
+                    navigation.navigate('Chat');
                   }
                 }]
               );
@@ -113,7 +117,7 @@ const SettingsScreen: React.FC = () => {
                           text: 'OK', 
                           onPress: () => {
                             // Navigate to home to refresh everything
-                            navigation.navigate('Home' as never);
+                            navigation.navigate('Home');
                           }
                         }]
                       );
