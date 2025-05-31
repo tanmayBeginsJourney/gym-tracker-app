@@ -55,7 +55,9 @@ const HomeScreen: React.FC = () => {
 
   const loadDashboardData = async () => {
     try {
-      setLoading(true);
+      // Only set loading if not already loading
+      if (!loading) setLoading(true);
+      
       let profile = await storageService.getUserProfile();
       console.log('🏠 HomeScreen - Initial profile load:', profile);
       
@@ -114,7 +116,8 @@ const HomeScreen: React.FC = () => {
       setTotalWorkouts(allWorkouts.length);
       setStreak(workoutStreak);
     } catch (error) {
-      console.error('Error loading dashboard data:', error);
+      console.error('❌ Error loading dashboard data:', error);
+      Alert.alert('Error', 'Failed to load dashboard data. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -122,7 +125,6 @@ const HomeScreen: React.FC = () => {
 
   const loadTodaysRoutine = async () => {
     try {
-      setLoading(true);
       // Load default bundle
       const bundle = await storageService.getDefaultRoutineBundle();
       setDefaultBundle(bundle);
@@ -147,9 +149,8 @@ const HomeScreen: React.FC = () => {
       const routine = getFallbackTodaysRoutine(allRoutines);
       setTodaysRoutine(routine);
     } catch (error) {
-      console.error('Error loading today\'s routine:', error);
-    } finally {
-      setLoading(false);
+      console.error('❌ Error loading today\'s routine:', error);
+      Alert.alert('Error', 'Failed to load today\'s routine. Please try again.');
     }
   };
 
@@ -254,7 +255,12 @@ const HomeScreen: React.FC = () => {
   };
 
   const navigateToWorkouts = () => {
-    navigation.navigate('Workout');
+    try {
+      navigation.navigate('Workout');
+    } catch (error) {
+      console.error('❌ Navigation error:', error);
+      Alert.alert('Navigation Error', 'Unable to navigate to workouts. Please try again.');
+    }
   };
 
   const navigateToAI = () => {
@@ -262,7 +268,13 @@ const HomeScreen: React.FC = () => {
   };
 
   const navigateToBundleManager = () => {
-    navigation.navigate('BundleManager', {});
+    try {
+      console.log('📦 Navigating to bundle manager');
+      navigation.navigate('BundleManager', {});
+    } catch (error) {
+      console.error('❌ Navigation error to bundle manager:', error);
+      Alert.alert('Navigation Error', 'Unable to navigate to bundle manager. Please try again.');
+    }
   };
 
   const setupProfile = () => {

@@ -37,6 +37,7 @@ const WorkoutScreen: React.FC<Props> = ({ navigation }) => {
   const loadData = useCallback(async () => {
     try {
       console.log('🔍 Loading workout screen data...');
+      setLoading(true);
       const [bundlesData, routinesData, recentWorkoutsData] = await Promise.all([
         storageService.getAllRoutineBundles(),
         storageService.getAllRoutines(),
@@ -87,6 +88,7 @@ const WorkoutScreen: React.FC<Props> = ({ navigation }) => {
       setRecentWorkouts(sortedWorkouts);
     } catch (error) {
       console.error('❌ Error loading workout screen data:', error);
+      Alert.alert('Error', 'Failed to load workout data. Please try again.');
     } finally {
       if (isMountedRef) setLoading(false);
     }
