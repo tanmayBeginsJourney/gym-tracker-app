@@ -9,7 +9,8 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { WorkoutRoutine, Workout, RoutineBundle } from '../types';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { WorkoutRoutine, Workout, RoutineBundle, RootStackParamList } from '../types';
 import { storageService } from '../services/storage';
 import { defaultRoutines } from '../data/exercises';
 import ActiveWorkoutScreen from './ActiveWorkoutScreen';
@@ -18,7 +19,7 @@ import WorkoutCompletionScreen from './WorkoutCompletionScreen';
 type WorkoutState = 'browse' | 'active' | 'complete';
 
 interface Props {
-  navigation: any;
+  navigation: StackNavigationProp<RootStackParamList, 'Workout'>;
 }
 
 const WorkoutScreen: React.FC<Props> = ({ navigation }) => {
@@ -31,62 +32,73 @@ const WorkoutScreen: React.FC<Props> = ({ navigation }) => {
   const [completedWorkout, setCompletedWorkout] = useState<Workout | null>(null);
   const [recentWorkouts, setRecentWorkouts] = useState<Workout[]>([]);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadData();
-  }, []);
+  const [isMountedRef, setIsMountedRef] = useState(true);
 
   const loadData = async () => {
     try {
       console.log('🔍 Loading workout screen data...');
-      
-      // Load all routines
-      let allRoutines = await storageService.getAllRoutines();
+      const [bundlesData, routinesData, recentWorkoutsData] = await Promise.all([
+        storageService.getAllRoutineBundles(),
+        storageService.getAllRoutines(),
+        storageService.getAllWorkouts()
+      ]);
+
+      if (!isMountedRef) return;
+
+      // Initialize with default routines if none exist
+      let allRoutines = routinesData;
       if (allRoutines.length === 0) {
         console.log('📥 Initializing with default routines...');
-        // Initialize with default routines
         for (const routine of defaultRoutines) {
           await storageService.saveRoutine(routine);
         }
         allRoutines = [...defaultRoutines];
       }
-      
-      setAvailableRoutines(allRoutines);
-      
-      // Separate custom routines
-      const custom = allRoutines.filter(r => r.isCustom);
-      setCustomRoutines(custom);
-      console.log('✨ Found custom routines:', custom.length);
 
-      // Load default bundle and today's routine
-      const bundle = await storageService.getDefaultRoutineBundle();
-      setDefaultBundle(bundle);
-      
-      if (bundle) {
-        console.log('📅 Default bundle found:', bundle.name);
+      const defaultBundle = bundlesData.find(b => b.isDefault) || null;
+      if (!isMountedRef) return;
+      setDefaultBundle(defaultBundle);
+      setAvailableRoutines(allRoutines);
+
+      const customRoutines = allRoutines.filter(r => r.isCustom);
+      if (!isMountedRef) return;
+      setCustomRoutines(customRoutines);
+
+      // Get today's routine from bundle or fallback
+      let todaysRoutine = null;
+      if (defaultBundle) {
         const todaysRoutineFromBundle = await storageService.getTodaysRoutine();
-        setTodaysRoutine(todaysRoutineFromBundle);
-        console.log('💪 Today\'s routine:', todaysRoutineFromBundle?.name || 'Rest day');
-      } else {
-        console.log('⚠️ No default bundle set, using fallback logic');
-        // Fallback to old logic if no bundle is set
-        const fallbackRoutine = getFallbackTodaysRoutine(allRoutines);
-        setTodaysRoutine(fallbackRoutine);
+        todaysRoutine = todaysRoutineFromBundle;
+      }
+      
+      if (!todaysRoutine) {
+        todaysRoutine = getFallbackTodaysRoutine(allRoutines);
       }
 
-      // Load recent workouts
-      const allWorkouts = await storageService.getAllWorkouts();
-      const recent = allWorkouts
+      if (!isMountedRef) return;
+      setTodaysRoutine(todaysRoutine);
+
+      // Get recent workouts (last 5)
+      const sortedWorkouts = recentWorkoutsData
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .slice(0, 5);
-      setRecentWorkouts(recent);
 
+      if (!isMountedRef) return;
+      setRecentWorkouts(sortedWorkouts);
     } catch (error) {
-      console.error('❌ Error loading workout data:', error);
+      console.error('❌ Error loading workout screen data:', error);
     } finally {
-      setLoading(false);
+      if (isMountedRef) setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadData();
+
+    return () => {
+      setIsMountedRef(false);
+    };
+  }, []);
 
   const getFallbackTodaysRoutine = (routines: WorkoutRoutine[]): WorkoutRoutine | null => {
     const dayOfWeek = new Date().getDay();
@@ -142,21 +154,21 @@ const WorkoutScreen: React.FC<Props> = ({ navigation }) => {
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
-      case 'beginner': return '#38a169';
-      case 'intermediate': return '#ff8c00';
-      case 'advanced': return '#e53e3e';
-      default: return '#4a5568';
+      case 'beginner': return '#2d7d32'; // Darker green for better contrast
+      case 'intermediate': return '#e65100'; // Darker orange for better contrast  
+      case 'advanced': return '#c62828'; // Darker red for better contrast
+      default: return '#37474f'; // Darker gray for better contrast
     }
   };
 
   const navigateToRoutineBuilder = () => {
     console.log('🏗️ Navigating to routine builder');
-    navigation.navigate('RoutineBuilder');
+    navigation.navigate('RoutineBuilder', {});
   };
 
   const navigateToBundleManager = () => {
     console.log('📦 Navigating to bundle manager');
-    navigation.navigate('BundleManager');
+    navigation.navigate('BundleManager', {});
   };
 
   const editRoutine = (routine: WorkoutRoutine) => {
@@ -174,13 +186,20 @@ const WorkoutScreen: React.FC<Props> = ({ navigation }) => {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
+            setLoading(true); // Disable interactions during deletion
             try {
               console.log('🗑️ Deleting routine:', routine.name);
               await storageService.deleteRoutine(routine.id);
               await loadData(); // Refresh data
-            } catch (error) {
+              Alert.alert('Success', `"${routine.name}" has been deleted.`);
+            } catch (error: any) {
               console.error('❌ Error deleting routine:', error);
-              Alert.alert('Error', 'Failed to delete routine. Please try again.');
+              Alert.alert(
+                'Error', 
+                error?.message ?? 'Failed to delete routine. Please try again.'
+              );
+            } finally {
+              setLoading(false); // Re-enable interactions
             }
           },
         },
