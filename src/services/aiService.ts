@@ -9,12 +9,12 @@ const AI_CONFIG = {
   
   // Option 2: OpenAI API (Paid but excellent)
   OPENAI_URL: 'https://api.openai.com/v1/chat/completions',
-  OPENAI_KEY: 'sk-your-openai-key-here', // Replace with your OpenAI key
+  OPENAI_KEY: process.env.OPENAI_API_KEY || '', // Set in environment variables
   OPENAI_MODEL: 'gpt-4o-mini', // Cost-effective and very capable
   
   // Option 3: Hugging Face (Current fallback)
   HF_URL: 'https://api-inference.huggingface.co/models/microsoft/DialoGPT-large',
-  HF_KEY: process.env.HF_KEY || 'your-hf-token-here', // Move to environment variable
+  HF_KEY: process.env.HUGGING_FACE_API_KEY || '', // Set in environment variables
   
   // AI Provider Priority (will try in this order)
   PROVIDER_PRIORITY: ['ollama', 'openai', 'huggingface'] as const
