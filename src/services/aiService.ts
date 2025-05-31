@@ -5,7 +5,7 @@ import { storageService } from './storage';
 const AI_CONFIG = {
   // Option 1: Local Ollama (Recommended - Free & Private)
   OLLAMA_URL: 'http://localhost:11434/api/generate',
-  OLLAMA_MODEL: 'qwen2.5:14b', // or 'deepseek-r1:8b', 'llama3.2:8b'
+  OLLAMA_MODEL: 'qwen2.5:7b', // Perfect for RTX 4070 - fits entirely in 8GB VRAM
   
   // Option 2: OpenAI API (Paid but excellent)
   OPENAI_URL: 'https://api.openai.com/v1/chat/completions',
@@ -27,14 +27,25 @@ class AIService {
 
   async generateResponse(userMessage: string): Promise<string> {
     try {
-      // Build comprehensive context
+      // Build comprehensive context with time awareness
       const context = await this.buildPersonalizedContext();
+      
+      // Add time-based context
+      const timeContext = this.buildTimeContext();
+      context.timeContext = timeContext;
+      
+      console.log('🤖 AI Context built:', {
+        totalWorkouts: context.currentStats?.totalWorkouts,
+        recentWorkouts: context.recentWorkouts?.length,
+        userProfile: !!context.userProfile,
+        hasGoals: context.userProfile?.goals?.length || 0
+      });
       
       // Try AI providers in priority order
       for (const provider of AI_CONFIG.PROVIDER_PRIORITY) {
         try {
           const response = await this.callAIProvider(provider, userMessage, context);
-          if (response) {
+          if (response && response.length > 50) { // Ensure we got a real response
             console.log(`✅ AI response from ${provider}`);
             return response;
           }
@@ -44,8 +55,9 @@ class AIService {
         }
       }
       
-      // Ultimate fallback
-      return this.generatePersonalizedFallback(userMessage, context);
+      // Enhanced fallback with full context
+      console.log('🔄 Using enhanced fallback with context');
+      return this.generateIntelligentFallback(userMessage, context);
       
     } catch (error) {
       console.error('AI Service error:', error);
@@ -199,7 +211,7 @@ class AIService {
         averageWorkoutDuration,
         strongestLifts
       },
-      userProfile, // Include full profile for personalization
+      userProfile: userProfile || undefined, // Convert null to undefined
       workoutHistory: allWorkouts,
       dayOfWeek: new Date().toLocaleDateString('en-US', { weekday: 'long' }),
       currentTime: new Date().toLocaleTimeString('en-US', { 
@@ -292,56 +304,170 @@ ${recentWorkouts.length > 0 ? `- Last workout: ${Math.floor((Date.now() - new Da
 Your role is to provide personalized, actionable fitness advice. Remember their specific goals, weak points, and preferences. Be encouraging but realistic. Reference their progress and tailor recommendations to their experience level.`;
   }
 
-  private generatePersonalizedFallback(userMessage: string, context: ChatContext): string {
-    const { userProfile, recentWorkouts, dayOfWeek } = context;
+  private generateIntelligentFallback(userMessage: string, context: ChatContext): string {
+    const { userProfile, recentWorkouts, dayOfWeek, currentStats } = context;
     const lowerMessage = userMessage.toLowerCase();
     
-    // Day-specific workout suggestions
-    if (lowerMessage.includes('what should i do') || lowerMessage.includes('workout today')) {
-      const suggestions = [
-        `Happy ${dayOfWeek}! `,
-        userProfile?.personalDetails?.weakBodyParts.length ? 
-          `Since your focus areas are ${userProfile.personalDetails.weakBodyParts.join(' and ')}, ` : '',
-        recentWorkouts.length === 0 ? 
-          "let's start with a full-body beginner routine." :
-          this.getSuggestedWorkoutType(dayOfWeek, recentWorkouts)
-      ];
+    // Greetings and introduction
+    if (lowerMessage.includes('hello') || lowerMessage.includes('hi') || lowerMessage.includes('hey')) {
+      const greeting = context.timeContext?.timeOfDay === 'morning' ? 'Good morning' : 
+                     context.timeContext?.timeOfDay === 'afternoon' ? 'Good afternoon' :
+                     context.timeContext?.timeOfDay === 'evening' ? 'Good evening' : 'Hey there';
       
-      return suggestions.join('');
+      let response = `${greeting}! 💪 `;
+      
+      if (currentStats.totalWorkouts === 0) {
+        response += "Ready to start your fitness journey? I can help you plan your first workout!";
+      } else if (recentWorkouts.length > 0) {
+        const lastWorkout = recentWorkouts[recentWorkouts.length - 1];
+        const daysSince = Math.floor((Date.now() - new Date(lastWorkout.date).getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (daysSince === 0) {
+          response += "Great job on today's workout! How are you feeling?";
+        } else if (daysSince === 1) {
+          response += "How did yesterday's workout treat you? Ready for another session?";
+        } else {
+          response += `It's been ${daysSince} days since your last workout. Let's get back in there!`;
+        }
+      } else {
+        response += `You've completed ${currentStats.totalWorkouts} workouts so far. What's on the agenda today?`;
+      }
+      
+      return response;
     }
     
-    // Progress and motivation
+    // About me / What do you know about me
+    if (lowerMessage.includes('what do you know about me') || lowerMessage.includes('about me')) {
+      let response = "Here's what I know about your fitness journey:\n\n";
+      
+      if (userProfile) {
+        response += `💪 Fitness Level: ${userProfile.experienceLevel}\n`;
+        if (userProfile.goals?.length) {
+          response += `🎯 Goals: ${userProfile.goals.join(', ')}\n`;
+        }
+        if (userProfile.weight && userProfile.height) {
+          response += `📊 Stats: ${userProfile.weight}kg, ${userProfile.height}cm\n`;
+        }
+        if (userProfile.personalDetails?.weakBodyParts?.length) {
+          response += `🎪 Focus Areas: ${userProfile.personalDetails.weakBodyParts.join(', ')}\n`;
+        }
+      }
+      
+      response += `🏋️ Workouts Completed: ${currentStats.totalWorkouts}\n`;
+      
+      if (recentWorkouts.length > 0) {
+        const lastWorkout = recentWorkouts[recentWorkouts.length - 1];
+        const daysSince = Math.floor((Date.now() - new Date(lastWorkout.date).getTime()) / (1000 * 60 * 60 * 24));
+        response += `📅 Last Workout: ${daysSince} day(s) ago (${lastWorkout.exercises?.length || 0} exercises)\n`;
+      }
+      
+      if (currentStats.averageWorkoutDuration > 0) {
+        response += `⏱️ Average Session: ${Math.round(currentStats.averageWorkoutDuration)} minutes\n`;
+      }
+      
+      response += "\nWhat would you like to work on next?";
+      return response;
+    }
+    
+    // Progress questions
     if (lowerMessage.includes('progress') || lowerMessage.includes('how am i doing')) {
-      if (context.currentStats.totalWorkouts < 3) {
-        return "You're just getting started - every workout is building your foundation! Focus on consistency first, results will follow. 💪";
+      if (currentStats.totalWorkouts === 0) {
+        return "You're at the starting line - the most exciting place to be! Every expert was once a beginner. Ready to log your first workout? 🚀";
+      } else if (currentStats.totalWorkouts < 5) {
+        return `Excellent start! You've completed ${currentStats.totalWorkouts} workout${currentStats.totalWorkouts === 1 ? '' : 's'}. The hardest part is building the habit - you're doing great! Keep the momentum going! 💪`;
       } else {
-        return `Great progress! You've completed ${context.currentStats.totalWorkouts} workouts. ${recentWorkouts.length > 0 ? 'Your consistency is paying off!' : 'Time to get back in there!'} Keep pushing towards your goals! 🔥`;
+        let response = `Amazing progress! You've completed ${currentStats.totalWorkouts} workouts. `;
+        
+        if (recentWorkouts.length >= 3) {
+          response += "Your consistency is outstanding! ";
+        } else if (recentWorkouts.length > 0) {
+          response += "Let's work on consistency - aim for 3-4 workouts per week. ";
+        }
+        
+        if (currentStats.averageWorkoutDuration > 0) {
+          const avgDuration = Math.round(currentStats.averageWorkoutDuration);
+          response += `Your sessions average ${avgDuration} minutes, which is ${avgDuration >= 45 ? 'perfect' : avgDuration >= 30 ? 'good' : 'a great start'}! `;
+        }
+        
+        response += "Every workout is making you stronger! 🔥";
+        return response;
       }
     }
     
-    // Specific goals support
-    if (userProfile?.personalDetails?.specificGoals.length) {
-      const goals = userProfile.personalDetails.specificGoals.join(', ');
-      return `Remember your goals: ${goals}. Every workout gets you closer! What specific area would you like to focus on today?`;
+    // Workout suggestions and what to do today
+    if (lowerMessage.includes('what should i do') || lowerMessage.includes('workout today') || lowerMessage.includes('what to train')) {
+      let response = `Great question! Today is ${dayOfWeek || 'a perfect day'} for training. `;
+      
+      if (userProfile?.personalDetails?.weakBodyParts?.length) {
+        response += `Since you want to focus on ${userProfile.personalDetails.weakBodyParts.join(' and ')}, `;
+      }
+      
+      if (recentWorkouts.length === 0) {
+        response += "I'd recommend starting with a full-body routine to build your foundation. Focus on compound movements like squats, push-ups, and planks!";
+      } else {
+        const lastWorkout = recentWorkouts[recentWorkouts.length - 1];
+        const daysSince = Math.floor((Date.now() - new Date(lastWorkout.date).getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (daysSince >= 2) {
+          response += "you've had good recovery time. Perfect for a strong session! What muscle group are you excited to train?";
+        } else if (daysSince === 1) {
+          response += "how about targeting a different muscle group than yesterday? This keeps you fresh and balanced.";
+        } else {
+          response += "since you trained today, maybe some light stretching or mobility work would be perfect!";
+        }
+      }
+      
+      return response;
     }
     
-    return "I'm here to help you crush your fitness goals! Tell me what you want to work on and I'll guide you through it. 💪";
+    // Exercise form and technique
+    if (lowerMessage.includes('how do i do') || lowerMessage.includes('form') || lowerMessage.includes('technique')) {
+      return "Great question about form! Proper technique is crucial for both safety and results. For specific exercises, I'd recommend:\n\n1. Start with bodyweight or light weights\n2. Focus on slow, controlled movements\n3. Full range of motion\n4. Breathe properly (exhale on exertion)\n\nWhich exercise would you like tips on? 🎯";
+    }
+    
+    // Motivation and encouragement
+    if (lowerMessage.includes('motivated') || lowerMessage.includes('motivation') || lowerMessage.includes('tired') || lowerMessage.includes('hard')) {
+      if (currentStats.totalWorkouts > 0) {
+        return `I see you've already completed ${currentStats.totalWorkouts} workout${currentStats.totalWorkouts === 1 ? '' : 's'} - that proves you have what it takes! 💪 Every champion has felt tired or unmotivated at times. The difference is they show up anyway. Your future self will thank you for every rep you do today! 🔥`;
+      } else {
+        return "Starting is always the hardest part, but you're here asking questions - that's already progress! 🌟 Remember: you don't have to be great to get started, but you have to get started to be great. Your fitness journey begins with the next step you take! 💪";
+      }
+    }
+    
+    // Specific goals and advice
+    if (userProfile?.personalDetails?.specificGoals?.length) {
+      const goals = userProfile.personalDetails.specificGoals.join(', ');
+      return `I remember your goals: ${goals}. Every workout gets you closer! ${this.getGoalSpecificAdvice(lowerMessage, userProfile.personalDetails.specificGoals)} What specific area would you like to focus on today?`;
+    }
+    
+    // Fallback with context
+    let contextualResponse = "I'm here to help you crush your fitness goals! ";
+    
+    if (currentStats.totalWorkouts > 0) {
+      contextualResponse += `With ${currentStats.totalWorkouts} workout${currentStats.totalWorkouts === 1 ? '' : 's'} under your belt, you're building something great. `;
+    }
+    
+    contextualResponse += "Tell me what you want to work on and I'll guide you through it! 💪";
+    
+    return contextualResponse;
   }
 
-  private getSuggestedWorkoutType(dayOfWeek: string, recentWorkouts: Workout[]): string {
-    // Analyze recent workouts to suggest what to do next
-    if (recentWorkouts.length === 0) return "How about starting with a full-body workout?";
+  private getGoalSpecificAdvice(message: string, goals: string[]): string {
+    const lowerGoals = goals.map(g => g.toLowerCase());
     
-    const lastWorkout = recentWorkouts[recentWorkouts.length - 1];
-    const daysSince = Math.floor((Date.now() - new Date(lastWorkout.date).getTime()) / (1000 * 60 * 60 * 24));
-    
-    if (daysSince >= 2) {
-      return "You've had some rest - perfect time for a strong session! What body part are you feeling motivated to train?";
-    } else if (daysSince === 1) {
-      return "Since yesterday's workout, how about focusing on a different muscle group today?";
-    } else {
-      return "Back for more already? Love the dedication! Maybe some light cardio or mobility work?";
+    if (lowerGoals.some(g => g.includes('weight loss') || g.includes('lose weight'))) {
+      return "For weight loss, combine strength training with cardio and focus on consistency.";
     }
+    
+    if (lowerGoals.some(g => g.includes('muscle') || g.includes('build') || g.includes('gain'))) {
+      return "For muscle building, prioritize progressive overload and compound exercises.";
+    }
+    
+    if (lowerGoals.some(g => g.includes('strength') || g.includes('strong'))) {
+      return "For strength gains, focus on heavy compound movements with proper rest.";
+    }
+    
+    return "Let's work systematically towards your goals.";
   }
 
   // Enhanced method with better UX
@@ -375,6 +501,52 @@ Your role is to provide personalized, actionable fitness advice. Remember their 
     }
 
     return starters.slice(0, 3);
+  }
+
+  private buildTimeContext() {
+    const now = new Date();
+    const hour = now.getHours();
+    const dayOfWeek = now.getDay();
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    
+    let timeOfDay = 'morning';
+    if (hour >= 12 && hour < 17) timeOfDay = 'afternoon';
+    else if (hour >= 17 && hour < 21) timeOfDay = 'evening';
+    else if (hour >= 21 || hour < 6) timeOfDay = 'night';
+    
+    return {
+      currentTime: now.toISOString(),
+      timeOfDay,
+      dayOfWeek: dayNames[dayOfWeek],
+      hour,
+      isWeekend: dayOfWeek === 0 || dayOfWeek === 6
+    };
+  }
+
+  private async getLastMessageTimeGap(): Promise<{ gapMinutes: number; gapHours: number; gapDays: number } | null> {
+    try {
+      const chatHistory = await storageService.getChatHistory();
+      if (chatHistory.length === 0) return null;
+      
+      const lastMessage = chatHistory[chatHistory.length - 1];
+      const now = new Date();
+      const lastMessageTime = new Date(lastMessage.timestamp);
+      
+      const gapMs = now.getTime() - lastMessageTime.getTime();
+      const gapMinutes = Math.floor(gapMs / (1000 * 60));
+      const gapHours = Math.floor(gapMs / (1000 * 60 * 60));
+      const gapDays = Math.floor(gapMs / (1000 * 60 * 60 * 24));
+      
+      return { gapMinutes, gapHours, gapDays };
+    } catch (error) {
+      console.error('Error calculating message gap:', error);
+      return null;
+    }
+  }
+
+  // Clear conversation history
+  async clearConversationHistory(): Promise<void> {
+    this.conversationHistory = [];
   }
 }
 

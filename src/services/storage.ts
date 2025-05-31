@@ -5,6 +5,8 @@ import {
   DailyNutrition, 
   Exercise, 
   WorkoutRoutine,
+  RoutineBundle,
+  DayOfWeek,
   ChatMessage,
   ProgressRecord
 } from '../types';
@@ -16,6 +18,7 @@ const STORAGE_KEYS = {
   NUTRITION: 'nutrition',
   EXERCISES: 'exercises',
   ROUTINES: 'routines',
+  ROUTINE_BUNDLES: 'routine_bundles',
   CHAT_HISTORY: 'chat_history',
   PROGRESS: 'progress',
 } as const;
@@ -159,6 +162,154 @@ class StorageService {
     return this.setItem(STORAGE_KEYS.ROUTINES, filteredRoutines);
   }
 
+  // Routine Bundle methods
+  async saveRoutineBundle(bundle: RoutineBundle): Promise<void> {
+    try {
+      console.log('💾 Saving routine bundle:', bundle.name);
+      const bundles = await this.getAllRoutineBundles();
+      const existingIndex = bundles.findIndex(b => b.id === bundle.id);
+      
+      // If setting as default, unset other defaults
+      if (bundle.isDefault) {
+        bundles.forEach(b => { b.isDefault = false; });
+        console.log('🎯 Setting as default bundle:', bundle.name);
+      }
+      
+      if (existingIndex >= 0) {
+        bundles[existingIndex] = bundle;
+        console.log('✏️ Updated existing bundle:', bundle.name);
+      } else {
+        bundles.push(bundle);
+        console.log('✨ Created new bundle:', bundle.name);
+      }
+      
+      return this.setItem(STORAGE_KEYS.ROUTINE_BUNDLES, bundles);
+    } catch (error) {
+      console.error('❌ Error saving routine bundle:', error);
+      throw error;
+    }
+  }
+
+  async getAllRoutineBundles(): Promise<RoutineBundle[]> {
+    try {
+      const bundles = await this.getItem<RoutineBundle[]>(STORAGE_KEYS.ROUTINE_BUNDLES);
+      return bundles || [];
+    } catch (error) {
+      console.error('❌ Error fetching routine bundles:', error);
+      return [];
+    }
+  }
+
+  async getRoutineBundleById(bundleId: string): Promise<RoutineBundle | null> {
+    try {
+      const bundles = await this.getAllRoutineBundles();
+      return bundles.find(b => b.id === bundleId) || null;
+    } catch (error) {
+      console.error('❌ Error fetching routine bundle by ID:', error);
+      return null;
+    }
+  }
+
+  async getDefaultRoutineBundle(): Promise<RoutineBundle | null> {
+    try {
+      const bundles = await this.getAllRoutineBundles();
+      const defaultBundle = bundles.find(b => b.isDefault);
+      console.log('🎯 Default bundle:', defaultBundle?.name || 'None set');
+      return defaultBundle || null;
+    } catch (error) {
+      console.error('❌ Error fetching default routine bundle:', error);
+      return null;
+    }
+  }
+
+  async setDefaultRoutineBundle(bundleId: string): Promise<void> {
+    try {
+      console.log('🎯 Setting new default bundle:', bundleId);
+      const bundles = await this.getAllRoutineBundles();
+      
+      // Unset all defaults and set the new one
+      bundles.forEach(bundle => {
+        bundle.isDefault = bundle.id === bundleId;
+      });
+      
+      return this.setItem(STORAGE_KEYS.ROUTINE_BUNDLES, bundles);
+    } catch (error) {
+      console.error('❌ Error setting default routine bundle:', error);
+      throw error;
+    }
+  }
+
+  async deleteRoutineBundle(bundleId: string): Promise<void> {
+    try {
+      console.log('🗑️ Deleting routine bundle:', bundleId);
+      const bundles = await this.getAllRoutineBundles();
+      const filteredBundles = bundles.filter(b => b.id !== bundleId);
+      return this.setItem(STORAGE_KEYS.ROUTINE_BUNDLES, filteredBundles);
+    } catch (error) {
+      console.error('❌ Error deleting routine bundle:', error);
+      throw error;
+    }
+  }
+
+  async getTodaysRoutine(): Promise<WorkoutRoutine | null> {
+    try {
+      const today = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() as DayOfWeek;
+      console.log('📅 Getting routine for today:', today);
+      
+      const defaultBundle = await this.getDefaultRoutineBundle();
+      if (!defaultBundle) {
+        console.log('⚠️ No default bundle set');
+        return null;
+      }
+      
+      const todaysRoutineId = defaultBundle.routineSchedule[today];
+      if (!todaysRoutineId) {
+        console.log('😴 No routine scheduled for today (rest day)');
+        return null;
+      }
+      
+      const routine = await this.getRoutineById(todaysRoutineId);
+      console.log('💪 Today\'s routine:', routine?.name || 'Not found');
+      return routine;
+    } catch (error) {
+      console.error('❌ Error getting today\'s routine:', error);
+      return null;
+    }
+  }
+
+  // Enhanced routine methods
+  async getRoutinesByIds(routineIds: string[]): Promise<WorkoutRoutine[]> {
+    try {
+      const allRoutines = await this.getAllRoutines();
+      return allRoutines.filter(routine => routineIds.includes(routine.id));
+    } catch (error) {
+      console.error('❌ Error fetching routines by IDs:', error);
+      return [];
+    }
+  }
+
+  async getCustomRoutines(): Promise<WorkoutRoutine[]> {
+    try {
+      const allRoutines = await this.getAllRoutines();
+      return allRoutines.filter(routine => routine.isCustom);
+    } catch (error) {
+      console.error('❌ Error fetching custom routines:', error);
+      return [];
+    }
+  }
+
+  async getPopularExercises(limit: number = 20): Promise<Exercise[]> {
+    try {
+      const allExercises = await this.getAllExercises();
+      return allExercises
+        .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
+        .slice(0, limit);
+    } catch (error) {
+      console.error('❌ Error fetching popular exercises:', error);
+      return [];
+    }
+  }
+
   // Chat methods
   async saveChatMessage(message: ChatMessage): Promise<void> {
     const chatHistory = await this.getChatHistory();
@@ -190,6 +341,14 @@ class StorageService {
   async getProgressByExercise(exerciseId: string): Promise<ProgressRecord[]> {
     const allProgress = await this.getAllProgress();
     return allProgress.filter(p => p.exerciseId === exerciseId);
+  }
+
+  async clearAllProgress(): Promise<void> {
+    return this.setItem(STORAGE_KEYS.PROGRESS, []);
+  }
+
+  async clearAllWorkouts(): Promise<void> {
+    return this.setItem(STORAGE_KEYS.WORKOUTS, []);
   }
 
   // Utility methods

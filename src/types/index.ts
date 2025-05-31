@@ -53,14 +53,29 @@ export interface Exercise {
   instructions: string;
   difficulty: 'beginner' | 'intermediate' | 'advanced';
   equipmentNeeded: string[];
+  popularity: number; // 1-100 ranking for popular exercises first
+}
+
+// Enhanced Routine Exercise with more configuration
+export interface RoutineExercise {
+  exerciseId: string;
+  exerciseName: string;
+  plannedSets: number;
+  plannedReps: number;
+  plannedWeight?: number; // Optional default weight
+  restTime: number; // Rest time in seconds
+  notes?: string;
+  order: number; // For exercise ordering in routine
 }
 
 // Workout Set
 export interface WorkoutSet {
   reps: number;
   weight: number; // in kg
-  restTime?: number; // in seconds
+  restTime?: number; // actual rest time taken
   completed: boolean;
+  setNumber: number; // Dynamic set numbering
+  notes?: string;
 }
 
 // Exercise in Workout
@@ -89,17 +104,29 @@ export interface Workout {
 export interface WorkoutRoutine {
   id: string;
   name: string;
-  description: string;
-  exercises: Array<{
-    exerciseId: string;
-    exerciseName: string;
-    targetSets: number;
-    targetReps: number;
-    targetWeight?: number;
-  }>;
+  description?: string;
+  exercises: RoutineExercise[];
   difficulty: 'beginner' | 'intermediate' | 'advanced';
   estimatedDuration: number; // in minutes
   muscleGroups: string[];
+  createdAt: Date;
+  lastUsed?: Date;
+  isCustom: boolean; // Distinguish custom vs default routines
+}
+
+// New: Routine Bundle System
+export type DayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+export interface RoutineBundle {
+  id: string;
+  name: string;
+  description?: string;
+  routineSchedule: {
+    [key in DayOfWeek]: string | null; // routineId or null for rest days
+  };
+  isDefault: boolean;
+  createdAt: Date;
+  lastModified: Date;
 }
 
 // Nutrition Types
@@ -165,6 +192,13 @@ export interface ChatContext {
   workoutHistory?: Workout[];
   dayOfWeek?: string;
   currentTime?: string;
+  timeContext?: {
+    currentTime: string;
+    timeOfDay: string;
+    dayOfWeek: string;
+    hour: number;
+    isWeekend: boolean;
+  };
 }
 
 // Navigation Types

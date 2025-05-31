@@ -11,6 +11,7 @@ import WorkoutScreen from './src/screens/WorkoutScreen';
 import ProgressScreen from './src/screens/ProgressScreen';
 import NutritionScreen from './src/screens/NutritionScreen';
 import ChatScreen from './src/screens/ChatScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 
 // Import services
 import { storageService } from './src/services/storage';
@@ -46,6 +47,41 @@ export default function App() {
         console.log('✅ Default routines loaded');
       }
 
+      // Check if user profile exists, create a basic one if not
+      const existingProfile = await storageService.getUserProfile();
+      if (!existingProfile) {
+        const defaultProfile = {
+          id: 'user-default',
+          name: 'Fitness Enthusiast',
+          age: 25,
+          weight: 70,
+          height: 175,
+          gender: 'other' as const,
+          experienceLevel: 'beginner' as const,
+          goals: ['strength', 'muscle'] as Array<'strength' | 'muscle' | 'endurance' | 'weight_loss'>,
+          createdAt: new Date(),
+          personalDetails: {
+            targetPhysique: 'lean_muscle' as const,
+            specificGoals: ['Build strength', 'Improve consistency', 'Feel more confident'],
+            weakBodyParts: ['chest', 'shoulders'] as Array<'legs' | 'back' | 'chest' | 'shoulders' | 'arms' | 'core' | 'forearms'>,
+            priorityMuscles: ['chest', 'shoulders', 'legs'],
+            preferredWorkoutStyle: 'mixed' as const,
+            workoutFrequency: 3,
+            sessionDuration: 45,
+            restDayPreferences: ['light stretching', 'walks'],
+            injuries: [],
+            allergies: [],
+            dietaryRestrictions: [],
+            motivationalFactors: ['feeling strong', 'looking good', 'health benefits'],
+            personalChallenges: ['consistency', 'time management'],
+            additionalNotes: 'New to fitness, excited to start this journey!'
+          }
+        };
+        
+        await storageService.saveUserProfile(defaultProfile);
+        console.log('✅ Default user profile created');
+      }
+
       console.log('🚀 App initialized successfully');
     } catch (error) {
       console.error('❌ App initialization failed:', error);
@@ -71,6 +107,8 @@ export default function App() {
                 iconName = focused ? 'restaurant' : 'restaurant-outline';
               } else if (route.name === 'Chat') {
                 iconName = focused ? 'chatbubble' : 'chatbubble-outline';
+              } else if (route.name === 'Settings') {
+                iconName = focused ? 'settings' : 'settings-outline';
               } else {
                 iconName = 'ellipse-outline';
               }
@@ -120,6 +158,11 @@ export default function App() {
             name="Chat" 
             component={ChatScreen} 
             options={{ title: 'AI Coach' }}
+          />
+          <Tab.Screen 
+            name="Settings" 
+            component={SettingsScreen} 
+            options={{ title: 'Settings' }}
           />
         </Tab.Navigator>
       </NavigationContainer>
