@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -12,6 +13,8 @@ import ProgressScreen from './src/screens/ProgressScreen';
 import NutritionScreen from './src/screens/NutritionScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import RoutineBuilderScreen from './src/screens/RoutineBuilderScreen';
+import BundleManagerScreen from './src/screens/BundleManagerScreen';
 
 // Import services
 import { storageService } from './src/services/storage';
@@ -19,7 +22,41 @@ import { defaultExercises, defaultRoutines } from './src/data/exercises';
 
 import type { RootStackParamList } from './src/types';
 
-const Tab = createBottomTabNavigator<RootStackParamList>();
+const Tab = createBottomTabNavigator();
+const Stack = createStackNavigator<RootStackParamList>();
+
+// Workout Stack Navigator
+function WorkoutStackNavigator() {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: '#1a365d',
+        },
+        headerTintColor: '#ffffff',
+        headerTitleStyle: {
+          fontWeight: 'bold',
+        },
+      }}
+    >
+      <Stack.Screen 
+        name="WorkoutMain" 
+        component={WorkoutScreen} 
+        options={{ title: 'Workout', headerShown: false }}
+      />
+      <Stack.Screen 
+        name="RoutineBuilder" 
+        component={RoutineBuilderScreen} 
+        options={{ title: 'Create Routine' }}
+      />
+      <Stack.Screen 
+        name="BundleManager" 
+        component={BundleManagerScreen} 
+        options={{ title: 'Workout Schedule' }}
+      />
+    </Stack.Navigator>
+  );
+}
 
 export default function App() {
   useEffect(() => {
@@ -141,7 +178,7 @@ export default function App() {
           />
           <Tab.Screen 
             name="Workout" 
-            component={WorkoutScreen} 
+            component={WorkoutStackNavigator} 
             options={{ title: 'Workout' }}
           />
           <Tab.Screen 

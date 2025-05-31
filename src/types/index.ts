@@ -205,6 +205,13 @@ export interface ChatContext {
 export type RootStackParamList = {
   Home: undefined;
   Workout: undefined;
+  WorkoutMain: undefined;
+  RoutineBuilder: {
+    editingRoutine?: WorkoutRoutine;
+  };
+  BundleManager: {
+    editingBundle?: RoutineBundle;
+  };
   Progress: undefined;
   Nutrition: undefined;
   Chat: undefined;
