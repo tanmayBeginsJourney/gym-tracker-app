@@ -1,6 +1,6 @@
 # 🏋️‍♂️ Personal Gym Tracker App
 
-A comprehensive fitness tracking application built with React Native and Expo, featuring AI-powered coaching, complete workout logging, and detailed progress analytics.
+A comprehensive fitness tracking application built with React Native and Expo, featuring AI-powered coaching, complete workout logging, custom routine creation, and detailed progress analytics.
 
 ## 🎯 Current Features
 
@@ -11,6 +11,27 @@ A comprehensive fitness tracking application built with React Native and Expo, f
 - **Motivational System**: Personal record detection, achievement celebrations, and progress tracking
 - **AI Coach**: Multi-provider AI system (Ollama/OpenAI/Hugging Face) with intelligent fallbacks
 - **Local Data Storage**: All data stored securely on your device with auto-save
+
+### ✅ **Phase 2.1: Custom Routine Creation (COMPLETED)**
+- **Custom Routine Builder**: Create personalized workouts from 30+ popular exercises
+- **Exercise Library**: Comprehensive database with popularity rankings and detailed instructions
+- **Routine Bundle System**: Organize routines into weekly schedules with day-by-day assignments
+- **Smart Scheduling**: Set default bundles for automatic daily workout suggestions
+- **Enhanced Set Counter**: Dynamic set tracking without "of X" limitations
+- **Rest Timer Controls**: Manual +/-15 second adjustments during countdown
+- **Routine Management**: Edit, delete, and organize custom routines with visual feedback
+
+### 🚧 **Phase 2.2: Exercise Library Management (Next)**
+- **Exercise Categories**: Filter by muscle groups and equipment
+- **Custom Exercise Creation**: Add your own exercises with instructions
+- **Exercise Analytics**: Track which exercises you perform most
+- **Equipment Filtering**: Find exercises based on available gym equipment
+
+### 🔮 **Phase 2.3: Progress Analytics**
+- **Detailed Progress Charts**: Strength progression visualization
+- **Volume Tracking**: Total weight lifted over time
+- **Personal Record Timeline**: Visual history of strength milestones
+- **Workout Consistency**: Streak tracking and frequency analysis
 
 ### 🚧 **Phase 2: Friction Elimination (In Progress)**
 - **Performance Optimization**: Faster app startup and navigation
@@ -89,22 +110,24 @@ gym_tracker/
 ├── src/
 │   ├── components/        # Reusable UI components
 │   ├── screens/          # Main app screens
-│   │   ├── HomeScreen.tsx           # Smart dashboard with routine scheduling
-│   │   ├── WorkoutScreen.tsx        # Exercise browsing and routine management
-│   │   ├── ActiveWorkoutScreen.tsx  # Core workout logging experience
-│   │   ├── WorkoutCompletionScreen.tsx # Post-workout celebration
-│   │   ├── ChatScreen.tsx           # AI coach interface
-│   │   ├── ProgressScreen.tsx       # Progress analytics (placeholder)
-│   │   ├── NutritionScreen.tsx      # Nutrition tracking (placeholder)
-│   │   └── SettingsScreen.tsx       # App settings and data management
+│   │   ├── HomeScreen.tsx               # Smart dashboard with routine scheduling
+│   │   ├── WorkoutScreen.tsx            # Exercise browsing and routine management
+│   │   ├── RoutineBuilderScreen.tsx     # Custom routine creation interface
+│   │   ├── BundleManagerScreen.tsx      # Weekly schedule management
+│   │   ├── ActiveWorkoutScreen.tsx      # Core workout logging experience
+│   │   ├── WorkoutCompletionScreen.tsx  # Post-workout celebration
+│   │   ├── ChatScreen.tsx               # AI coach interface
+│   │   ├── ProgressScreen.tsx           # Progress analytics (placeholder)
+│   │   ├── NutritionScreen.tsx          # Nutrition tracking (placeholder)
+│   │   └── SettingsScreen.tsx           # App settings and data management
 │   ├── services/         # Data & AI services
-│   │   ├── storage.ts    # AsyncStorage wrapper with workout management
+│   │   ├── storage.ts    # AsyncStorage wrapper with workout & routine management
 │   │   └── aiService.ts  # Multi-provider AI service
 │   ├── types/           # TypeScript definitions
-│   └── data/            # Default exercises & routines
+│   └── data/            # Default exercises & routines (30+ exercises)
 ├── __tests__/           # Test files
 ├── assets/              # Images & fonts
-└── App.tsx             # Main app component
+└── App.tsx             # Main app component with stack navigation
 ```
 
 ## 🔧 **Technology Stack**
@@ -125,11 +148,47 @@ All data is stored locally using AsyncStorage with the following structure:
 
 - **User Profile**: `user_profile` - Personal info, goals, preferences
 - **Workouts**: `workout_[timestamp]` - Individual workout sessions
-- **Routines**: `routine_[id]` - Workout templates and programs
-- **Exercises**: `exercises` - Exercise database with categories
+- **Routines**: `routine_[id]` - Workout templates and custom routines
+- **Routine Bundles**: `routine_bundles` - Weekly workout schedules
+- **Exercises**: `exercises` - Exercise database with popularity rankings
 - **Progress**: `progress_[exercise]_[date]` - Performance tracking
 - **Chat History**: `chat_history` - AI coach conversations
 - **Nutrition**: `nutrition_[date]` - Daily nutrition logs
+
+### Enhanced Routine System
+```typescript
+// Create custom routine
+const routine: WorkoutRoutine = {
+  id: 'custom_routine_123',
+  name: 'My Push Day',
+  exercises: [
+    {
+      exerciseId: 'bench-press',
+      exerciseName: 'Bench Press',
+      plannedSets: 4,
+      plannedReps: 8,
+      plannedWeight: 80,
+      restTime: 180,
+      order: 1
+    }
+  ],
+  isCustom: true,
+  estimatedDuration: 60
+};
+
+// Create weekly bundle
+const bundle: RoutineBundle = {
+  id: 'my_split',
+  name: '5-Day Power Split',
+  routineSchedule: {
+    monday: 'push_routine_id',
+    tuesday: null, // rest day
+    wednesday: 'pull_routine_id',
+    // ... etc
+  },
+  isDefault: true
+};
+```
 
 ### Data Export/Import
 ```typescript
@@ -175,23 +234,25 @@ AI: "It's Push Day! Based on your schedule, time for chest and
 
 ## 🏃‍♂️ **Current Development Status**
 
-### ✅ **Recently Completed**
-- Complete workout logging flow with offline capability
-- Smart dashboard with day-of-week routine scheduling
-- Personal record detection and celebration system
-- AI coach improvements with text box positioning fix
-- Data reset functionality in settings
+### ✅ **Recently Completed (Phase 2.1)**
+- **Custom Routine Builder**: Full exercise selection from 30+ popular exercises
+- **Routine Bundle System**: Weekly schedule management with day-by-day assignments
+- **Enhanced WorkoutScreen**: Integrated custom routine management with CRUD operations
+- **Smart Navigation**: Stack navigation for seamless routine creation flow
+- **Bundle Status Display**: Visual feedback for active workout schedules
+- **Exercise Popularity Ranking**: Intelligent exercise ordering for better UX
 
-### 🎯 **Next Sprint (Phase 2.1)**
-- Performance optimization and faster app startup
-- Enhanced smart defaults and weight predictions
-- Voice input for workout logging
-- Advanced progress analytics and charts
+### 🎯 **Next Sprint (Phase 2.2)**
+- **Exercise Library Management**: Advanced filtering and custom exercise creation
+- **Exercise Analytics**: Track most-used exercises and performance trends
+- **Equipment-Based Filtering**: Find exercises based on available gym equipment
+- **Exercise Instructions**: Enhanced guidance with form tips and variations
 
 ### 📈 **Progress Tracking**
-- **Total Screens**: 8 main screens (6 functional, 2 placeholders)
+- **Total Screens**: 10 main screens (8 functional, 2 placeholders)
 - **Core Flow**: 100% complete (Home → Workout → Active → Completion)
-- **Data Layer**: Full workout and user management
+- **Custom Routines**: 100% complete (Create → Edit → Schedule → Execute)
+- **Data Layer**: Full workout, routine, and bundle management
 - **AI Integration**: Multi-provider system with graceful fallbacks
 - **Testing**: Expo Go compatible, offline functionality verified
 
