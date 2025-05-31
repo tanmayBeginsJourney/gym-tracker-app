@@ -6,9 +6,10 @@ import {
   TouchableOpacity,
   ScrollView,
   Modal,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { WorkoutRoutine, Workout } from '../types';
+import { WorkoutRoutine, Workout, RoutineBundle } from '../types';
 import { storageService } from '../services/storage';
 import { defaultRoutines } from '../data/exercises';
 import ActiveWorkoutScreen from './ActiveWorkoutScreen';
@@ -16,9 +17,16 @@ import WorkoutCompletionScreen from './WorkoutCompletionScreen';
 
 type WorkoutState = 'browse' | 'active' | 'complete';
 
-const WorkoutScreen: React.FC = () => {
+interface Props {
+  navigation: any;
+}
+
+const WorkoutScreen: React.FC<Props> = ({ navigation }) => {
   const [workoutState, setWorkoutState] = useState<WorkoutState>('browse');
   const [availableRoutines, setAvailableRoutines] = useState<WorkoutRoutine[]>([]);
+  const [customRoutines, setCustomRoutines] = useState<WorkoutRoutine[]>([]);
+  const [defaultBundle, setDefaultBundle] = useState<RoutineBundle | null>(null);
+  const [todaysRoutine, setTodaysRoutine] = useState<WorkoutRoutine | null>(null);
   const [selectedRoutine, setSelectedRoutine] = useState<WorkoutRoutine | null>(null);
   const [completedWorkout, setCompletedWorkout] = useState<Workout | null>(null);
   const [recentWorkouts, setRecentWorkouts] = useState<Workout[]>([]);
@@ -30,16 +38,41 @@ const WorkoutScreen: React.FC = () => {
 
   const loadData = async () => {
     try {
-      // Load routines
-      let routines = await storageService.getAllRoutines();
-      if (routines.length === 0) {
+      console.log('🔍 Loading workout screen data...');
+      
+      // Load all routines
+      let allRoutines = await storageService.getAllRoutines();
+      if (allRoutines.length === 0) {
+        console.log('📥 Initializing with default routines...');
         // Initialize with default routines
         for (const routine of defaultRoutines) {
           await storageService.saveRoutine(routine);
         }
-        routines = defaultRoutines;
+        allRoutines = [...defaultRoutines];
       }
-      setAvailableRoutines(routines);
+      
+      setAvailableRoutines(allRoutines);
+      
+      // Separate custom routines
+      const custom = allRoutines.filter(r => r.isCustom);
+      setCustomRoutines(custom);
+      console.log('✨ Found custom routines:', custom.length);
+
+      // Load default bundle and today's routine
+      const bundle = await storageService.getDefaultRoutineBundle();
+      setDefaultBundle(bundle);
+      
+      if (bundle) {
+        console.log('📅 Default bundle found:', bundle.name);
+        const todaysRoutineFromBundle = await storageService.getTodaysRoutine();
+        setTodaysRoutine(todaysRoutineFromBundle);
+        console.log('💪 Today\'s routine:', todaysRoutineFromBundle?.name || 'Rest day');
+      } else {
+        console.log('⚠️ No default bundle set, using fallback logic');
+        // Fallback to old logic if no bundle is set
+        const fallbackRoutine = getFallbackTodaysRoutine(allRoutines);
+        setTodaysRoutine(fallbackRoutine);
+      }
 
       // Load recent workouts
       const allWorkouts = await storageService.getAllWorkouts();
@@ -49,10 +82,22 @@ const WorkoutScreen: React.FC = () => {
       setRecentWorkouts(recent);
 
     } catch (error) {
-      console.error('Error loading workout data:', error);
+      console.error('❌ Error loading workout data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const getFallbackTodaysRoutine = (routines: WorkoutRoutine[]): WorkoutRoutine | null => {
+    const dayOfWeek = new Date().getDay();
+    
+    if (dayOfWeek === 1 || dayOfWeek === 4) { // Monday or Thursday
+      return routines.find(r => r.id === 'push-day') || null;
+    } else if (dayOfWeek === 3 || dayOfWeek === 6) { // Wednesday or Saturday
+      return routines.find(r => r.id === 'beginner-full-body') || null;
+    }
+    
+    return null;
   };
 
   const startWorkout = (routine: WorkoutRoutine) => {
@@ -104,16 +149,43 @@ const WorkoutScreen: React.FC = () => {
     }
   };
 
-  const getTodaysRoutine = (): WorkoutRoutine | null => {
-    const dayOfWeek = new Date().getDay();
-    
-    if (dayOfWeek === 1 || dayOfWeek === 4) { // Monday or Thursday
-      return availableRoutines.find(r => r.id === 'push-day') || null;
-    } else if (dayOfWeek === 3 || dayOfWeek === 6) { // Wednesday or Saturday
-      return availableRoutines.find(r => r.id === 'beginner-full-body') || null;
-    }
-    
-    return null;
+  const navigateToRoutineBuilder = () => {
+    console.log('🏗️ Navigating to routine builder');
+    navigation.navigate('RoutineBuilder');
+  };
+
+  const navigateToBundleManager = () => {
+    console.log('📦 Navigating to bundle manager');
+    navigation.navigate('BundleManager');
+  };
+
+  const editRoutine = (routine: WorkoutRoutine) => {
+    console.log('✏️ Editing routine:', routine.name);
+    navigation.navigate('RoutineBuilder', { editingRoutine: routine });
+  };
+
+  const deleteRoutine = (routine: WorkoutRoutine) => {
+    Alert.alert(
+      'Delete Routine',
+      `Are you sure you want to delete "${routine.name}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('🗑️ Deleting routine:', routine.name);
+              await storageService.deleteRoutine(routine.id);
+              await loadData(); // Refresh data
+            } catch (error) {
+              console.error('❌ Error deleting routine:', error);
+              Alert.alert('Error', 'Failed to delete routine. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -135,28 +207,67 @@ const WorkoutScreen: React.FC = () => {
     );
   }
 
-  const todaysRoutine = getTodaysRoutine();
-
   return (
     <View style={styles.container}>
       <ScrollView style={styles.content}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Workouts</Text>
-          <Text style={styles.headerSubtitle}>Choose your routine and start training</Text>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Workouts</Text>
+            <Text style={styles.headerSubtitle}>Choose your routine and start training</Text>
+          </View>
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              style={styles.headerButton}
+              onPress={navigateToRoutineBuilder}
+            >
+              <Ionicons name="add" size={20} color="#4CAF50" />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.headerButton}
+              onPress={navigateToBundleManager}
+            >
+              <Ionicons name="calendar" size={20} color="#4CAF50" />
+            </TouchableOpacity>
+          </View>
         </View>
+
+        {/* Bundle Status */}
+        {defaultBundle ? (
+          <View style={styles.bundleStatus}>
+            <View style={styles.bundleInfo}>
+              <Ionicons name="calendar-outline" size={16} color="#4CAF50" />
+              <Text style={styles.bundleText}>
+                Active Schedule: <Text style={styles.bundleName}>{defaultBundle.name}</Text>
+              </Text>
+            </View>
+            <TouchableOpacity onPress={navigateToBundleManager}>
+              <Ionicons name="chevron-forward" size={16} color="#666" />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.noBundlePrompt}>
+            <Text style={styles.noBundleText}>No workout schedule set</Text>
+            <TouchableOpacity 
+              style={styles.setBundleButton}
+              onPress={navigateToBundleManager}
+            >
+              <Text style={styles.setBundleButtonText}>Create Schedule</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Today's Recommended Workout */}
         {todaysRoutine && (
           <View style={styles.todaySection}>
-            <Text style={styles.sectionTitle}>Today's Recommended Workout</Text>
+            <Text style={styles.sectionTitle}>Today's Workout</Text>
             <TouchableOpacity 
               style={styles.todayCard}
               onPress={() => startWorkout(todaysRoutine)}
             >
               <View style={styles.todayHeader}>
                 <Ionicons name="star" size={24} color="#ffd700" />
-                <Text style={styles.todayLabel}>RECOMMENDED</Text>
+                <Text style={styles.todayLabel}>TODAY</Text>
               </View>
               <Text style={styles.todayName}>{todaysRoutine.name}</Text>
               <Text style={styles.todayDescription}>{todaysRoutine.description}</Text>
@@ -187,10 +298,99 @@ const WorkoutScreen: React.FC = () => {
           </View>
         )}
 
-        {/* All Routines */}
+        {/* Quick Actions */}
+        <View style={styles.quickActionsSection}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.quickActions}>
+            <TouchableOpacity 
+              style={styles.quickAction}
+              onPress={navigateToRoutineBuilder}
+            >
+              <View style={styles.quickActionIcon}>
+                <Ionicons name="fitness" size={24} color="#4CAF50" />
+              </View>
+              <Text style={styles.quickActionTitle}>Create Routine</Text>
+              <Text style={styles.quickActionSubtitle}>Build custom workout</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.quickAction}
+              onPress={navigateToBundleManager}
+            >
+              <View style={styles.quickActionIcon}>
+                <Ionicons name="calendar" size={24} color="#4CAF50" />
+              </View>
+              <Text style={styles.quickActionTitle}>Schedule</Text>
+              <Text style={styles.quickActionSubtitle}>Plan weekly workouts</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Custom Routines */}
+        {customRoutines.length > 0 && (
+          <View style={styles.routinesSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>My Custom Routines</Text>
+              <Text style={styles.sectionCount}>({customRoutines.length})</Text>
+            </View>
+            {customRoutines.map((routine) => (
+              <View key={routine.id} style={styles.routineCard}>
+                <TouchableOpacity
+                  style={styles.routineMain}
+                  onPress={() => startWorkout(routine)}
+                >
+                  <View style={styles.routineHeader}>
+                    <Text style={styles.routineName}>{routine.name}</Text>
+                    <View style={styles.customBadge}>
+                      <Text style={styles.customBadgeText}>Custom</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.routineDescription} numberOfLines={2}>
+                    {routine.description || `${routine.exercises.length} exercises`}
+                  </Text>
+                  <View style={styles.routineDetails}>
+                    <View style={styles.routineDetail}>
+                      <Ionicons name="barbell" size={14} color="#666" />
+                      <Text style={styles.routineDetailText}>
+                        {routine.exercises.length} exercises
+                      </Text>
+                    </View>
+                    <View style={styles.routineDetail}>
+                      <Ionicons name="time" size={14} color="#666" />
+                      <Text style={styles.routineDetailText}>
+                        ~{routine.estimatedDuration} min
+                      </Text>
+                    </View>
+                    <View style={[styles.difficultyBadge, { backgroundColor: getDifficultyColor(routine.difficulty) }]}>
+                      <Text style={styles.difficultyText}>{routine.difficulty}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+                
+                {/* Custom routine actions */}
+                <View style={styles.routineActions}>
+                  <TouchableOpacity
+                    style={styles.routineActionButton}
+                    onPress={() => editRoutine(routine)}
+                  >
+                    <Ionicons name="pencil" size={16} color="#4CAF50" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.routineActionButton}
+                    onPress={() => deleteRoutine(routine)}
+                  >
+                    <Ionicons name="trash" size={16} color="#f44336" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Default Routines */}
         <View style={styles.routinesSection}>
-          <Text style={styles.sectionTitle}>All Routines</Text>
-          {availableRoutines.map((routine) => (
+          <Text style={styles.sectionTitle}>Default Routines</Text>
+          {availableRoutines.filter(r => !r.isCustom).map((routine) => (
             <TouchableOpacity
               key={routine.id}
               style={styles.routineCard}
@@ -202,27 +402,22 @@ const WorkoutScreen: React.FC = () => {
                   <Text style={styles.difficultyText}>{routine.difficulty}</Text>
                 </View>
               </View>
-              <Text style={styles.routineDescription}>{routine.description}</Text>
+              <Text style={styles.routineDescription} numberOfLines={2}>
+                {routine.description}
+              </Text>
               <View style={styles.routineDetails}>
                 <View style={styles.routineDetail}>
-                  <Ionicons name="barbell" size={16} color="#4a5568" />
+                  <Ionicons name="barbell" size={14} color="#666" />
                   <Text style={styles.routineDetailText}>
                     {routine.exercises.length} exercises
                   </Text>
                 </View>
                 <View style={styles.routineDetail}>
-                  <Ionicons name="time" size={16} color="#4a5568" />
+                  <Ionicons name="time" size={14} color="#666" />
                   <Text style={styles.routineDetailText}>
                     ~{routine.estimatedDuration} min
                   </Text>
                 </View>
-              </View>
-              <View style={styles.muscleGroups}>
-                {routine.muscleGroups.map((group, index) => (
-                  <View key={index} style={styles.muscleGroup}>
-                    <Text style={styles.muscleGroupText}>{group}</Text>
-                  </View>
-                ))}
               </View>
             </TouchableOpacity>
           ))}
@@ -301,6 +496,10 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: '#ffffff',
   },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
@@ -311,16 +510,63 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#4a5568',
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerButton: {
+    padding: 8,
+  },
+  
+  // Bundle Status
+  bundleStatus: {
+    padding: 16,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 16,
+  },
+  bundleInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  bundleText: {
+    fontSize: 14,
+    color: '#4a5568',
+  },
+  bundleName: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1a365d',
+  },
+  noBundlePrompt: {
+    padding: 16,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 16,
+  },
+  noBundleText: {
+    fontSize: 14,
+    color: '#4a5568',
+    marginBottom: 16,
+  },
+  setBundleButton: {
+    backgroundColor: '#3182ce',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  setBundleButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
   
   // Today's Section
   todaySection: {
     padding: 16,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1a365d',
-    marginBottom: 16,
   },
   todayCard: {
     backgroundColor: '#ffffff',
@@ -393,6 +639,21 @@ const styles = StyleSheet.create({
   routinesSection: {
     padding: 16,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1a365d',
+  },
+  sectionCount: {
+    fontSize: 14,
+    color: '#4a5568',
+  },
   routineCard: {
     backgroundColor: '#ffffff',
     padding: 16,
@@ -403,6 +664,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  routineMain: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   routineHeader: {
     flexDirection: 'row',
@@ -437,29 +703,13 @@ const styles = StyleSheet.create({
     color: '#4a5568',
     marginLeft: 4,
   },
-  muscleGroups: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  muscleGroup: {
-    backgroundColor: '#e2e8f0',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 8,
-    marginBottom: 4,
-  },
-  muscleGroupText: {
-    fontSize: 12,
-    color: '#4a5568',
-    fontWeight: '500',
-  },
-  difficultyBadge: {
+  customBadge: {
+    backgroundColor: '#3182ce',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
   },
-  difficultyText: {
+  customBadgeText: {
     fontSize: 12,
     fontWeight: 'bold',
     color: '#ffffff',
@@ -510,6 +760,56 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#4a5568',
     marginLeft: 4,
+  },
+  quickActionsSection: {
+    padding: 16,
+  },
+  quickActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  quickAction: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  quickActionIcon: {
+    marginBottom: 8,
+  },
+  quickActionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a365d',
+  },
+  quickActionSubtitle: {
+    fontSize: 14,
+    color: '#4a5568',
+  },
+  difficultyBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  difficultyText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  routineActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  routineActionButton: {
+    padding: 8,
   },
 });
 
