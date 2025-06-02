@@ -4,6 +4,35 @@
 - **Sprint 2.1**: 100% complete, production-ready
 - **Current State**: All UI/UX issues resolved, core workflow functional
 - **Next Goal**: Exercise management system (create/edit/delete custom exercises)
+- **Working Branch**: `sprint-2.2-exercise-management` (created from main)
+
+## Development Workflow & Quality Standards
+
+### **Git Branching Strategy**
+- **Feature Branch**: `sprint-2.2-exercise-management` (current)
+- **Commit Pattern**: Regular commits with descriptive messages
+- **Merge Strategy**: Merge to `main` after complete sprint review
+- **Push Schedule**: Push regularly during development, final push after CodeRabbit review
+
+### **CodeRabbit Review Process**
+- **Required**: Submit all code for CodeRabbit review before sprint completion
+- **Standard**: Address ALL CodeRabbit suggestions (Sprint 2.1 achieved "0 actionable comments")
+- **Focus Areas**: Accessibility props, TypeScript strictness, performance optimizations
+- **Success Metric**: CodeRabbit approval with 0 actionable comments
+
+### **Manual Testing Requirements**
+- **Zero Tolerance**: No UI bugs, all workflows must work end-to-end
+- **Device Testing**: Test on actual device for touch interactions
+- **Complete Workflow**: Create exercise → Add to routine → Use in workout
+- **Edge Cases**: Empty search, no custom exercises, duplicate names
+- **Performance**: Large exercise libraries, efficient filtering
+
+### **Quality Gates**
+1. **TypeScript Strict Mode**: No `any` types unless absolutely necessary
+2. **Conditional Logging**: All console.log wrapped in `if (__DEV__)`
+3. **Accessibility**: Add `accessibilityLabel`, `accessibilityRole`, `accessibilityHint`
+4. **Navigation**: Use `navigation.reset()` instead of hacky patterns
+5. **Production Ready**: No placeholders, no "coming soon" features
 
 ## Key Files to Consult
 - `CURRENT_PROJECT_STATUS.md` - Complete roadmap and current status
