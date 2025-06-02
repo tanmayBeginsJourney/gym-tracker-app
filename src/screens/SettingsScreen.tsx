@@ -18,27 +18,57 @@ import type { RootStackParamList } from '../types';
 type SettingsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Settings'>;
 
 const SettingsScreen: React.FC = () => {
-  console.log('⚙️ SettingsScreen - Component mounted');
+  if (__DEV__) console.log('⚙️ SettingsScreen - Component mounted');
   
   const navigation = useNavigation<SettingsScreenNavigationProp>();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [autoBackup, setAutoBackup] = useState(false);
 
+  const clearCustomRoutines = async () => {
+    const allRoutines = await storageService.getAllRoutines();
+    const customRoutines = allRoutines.filter(r => r.isCustom);
+    if (__DEV__) console.log(`⚙️ Found ${customRoutines.length} custom routines to delete`);
+    
+    for (const routine of customRoutines) {
+      await storageService.deleteRoutine(routine.id);
+      if (__DEV__) console.log(`✅ Deleted custom routine: ${routine.name}`);
+    }
+  };
+
+  const clearCustomBundles = async () => {
+    const allBundles = await storageService.getAllRoutineBundles();
+    const customBundles = allBundles.filter(b => !b.isDefault);
+    if (__DEV__) console.log(`⚙️ Found ${customBundles.length} custom bundles to delete`);
+    
+    for (const bundle of customBundles) {
+      await storageService.deleteRoutineBundle(bundle.id);
+      if (__DEV__) console.log(`✅ Deleted custom bundle: ${bundle.name}`);
+    }
+    
+    // Reset default bundle
+    const defaultBundle = allBundles.find(b => b.isDefault);
+    if (defaultBundle) {
+      if (__DEV__) console.log(`⚙️ Resetting default bundle: ${defaultBundle.name}`);
+      await storageService.deleteRoutineBundle(defaultBundle.id);
+      if (__DEV__) console.log(`✅ Default bundle reset`);
+    }
+  };
+
   const handleResetPRs = () => {
-    console.log('⚙️ SettingsScreen - Reset PRs button pressed');
+    if (__DEV__) console.log('⚙️ SettingsScreen - Reset PRs button pressed');
     Alert.alert(
       'Reset Personal Records',
       'This will permanently delete all your personal records. This action cannot be undone.',
       [
-        { text: 'Cancel', style: 'cancel', onPress: () => console.log('⚙️ PR Reset cancelled') },
+        { text: 'Cancel', style: 'cancel', onPress: () => { if (__DEV__) console.log('⚙️ PR Reset cancelled'); } },
         {
           text: 'Reset',
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('⚙️ Starting PR reset process...');
+              if (__DEV__) console.log('⚙️ Starting PR reset process...');
               await storageService.clearAllProgress();
-              console.log('✅ PR reset completed successfully');
+              if (__DEV__) console.log('✅ PR reset completed successfully');
               
               Alert.alert(
                 'Success', 
@@ -46,10 +76,11 @@ const SettingsScreen: React.FC = () => {
                 [{ 
                   text: 'OK', 
                   onPress: () => {
-                    console.log('⚙️ Navigating to Home after PR reset');
-                    // Reset HomeScreen by navigating away and back
-                    navigation.navigate('Workout');
-                    setTimeout(() => navigation.navigate('Home'), 100);
+                    if (__DEV__) console.log('⚙️ Navigating to Home after PR reset');
+                    navigation.reset({
+                      index: 0,
+                      routes: [{ name: 'Home' }],
+                    });
                   }
                 }]
               );
@@ -64,20 +95,20 @@ const SettingsScreen: React.FC = () => {
   };
 
   const handleResetChatHistory = () => {
-    console.log('⚙️ SettingsScreen - Reset Chat History button pressed');
+    if (__DEV__) console.log('⚙️ SettingsScreen - Reset Chat History button pressed');
     Alert.alert(
       'Reset AI Chat History',
       'This will permanently delete your entire conversation history with the AI coach. This action cannot be undone.',
       [
-        { text: 'Cancel', style: 'cancel', onPress: () => console.log('⚙️ Chat reset cancelled') },
+        { text: 'Cancel', style: 'cancel', onPress: () => { if (__DEV__) console.log('⚙️ Chat reset cancelled'); } },
         {
           text: 'Reset',
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('⚙️ Starting chat history reset process...');
+              if (__DEV__) console.log('⚙️ Starting chat history reset process...');
               await storageService.clearChatHistory();
-              console.log('✅ Chat history reset completed successfully');
+              if (__DEV__) console.log('✅ Chat history reset completed successfully');
               
               Alert.alert(
                 'Success', 
@@ -85,7 +116,7 @@ const SettingsScreen: React.FC = () => {
                 [{ 
                   text: 'OK', 
                   onPress: () => {
-                    console.log('⚙️ Navigating to Chat after reset');
+                    if (__DEV__) console.log('⚙️ Navigating to Chat after reset');
                     navigation.navigate('Chat');
                   }
                 }]
@@ -101,12 +132,12 @@ const SettingsScreen: React.FC = () => {
   };
 
   const handleResetAllWorkouts = () => {
-    console.log('⚙️ SettingsScreen - Reset All Data button pressed');
+    if (__DEV__) console.log('⚙️ SettingsScreen - Reset All Data button pressed');
     Alert.alert(
       'Reset All Data',
       'This will permanently delete ALL your data: workouts, progress, chat history, AND custom routines. This is a destructive action that cannot be undone. Are you absolutely sure?',
       [
-        { text: 'Cancel', style: 'cancel', onPress: () => console.log('⚙️ Full reset cancelled') },
+        { text: 'Cancel', style: 'cancel', onPress: () => { if (__DEV__) console.log('⚙️ Full reset cancelled'); } },
         {
           text: 'I\'m Sure',
           style: 'destructive',
@@ -115,53 +146,27 @@ const SettingsScreen: React.FC = () => {
               'Final Confirmation',
               'This will delete EVERYTHING: workouts, progress records, chat history, custom routines, and custom schedules.',
               [
-                { text: 'Cancel', style: 'cancel', onPress: () => console.log('⚙️ Final reset cancelled') },
+                { text: 'Cancel', style: 'cancel', onPress: () => { if (__DEV__) console.log('⚙️ Final reset cancelled'); } },
                 {
                   text: 'DELETE EVERYTHING',
                   style: 'destructive',
                   onPress: async () => {
                     try {
-                      console.log('⚙️ Starting complete data wipe...');
+                      if (__DEV__) console.log('⚙️ Starting complete data wipe...');
                       
-                      // Clear ALL data including custom routines and bundles
                       await storageService.clearAllWorkouts();
-                      console.log('✅ Workouts cleared');
+                      if (__DEV__) console.log('✅ Workouts cleared');
                       
                       await storageService.clearAllProgress();
-                      console.log('✅ Progress records cleared');
+                      if (__DEV__) console.log('✅ Progress records cleared');
                       
                       await storageService.clearChatHistory();
-                      console.log('✅ Chat history cleared');
+                      if (__DEV__) console.log('✅ Chat history cleared');
                       
-                      // Clear custom routines and bundles
-                      const allRoutines = await storageService.getAllRoutines();
-                      const customRoutines = allRoutines.filter(r => r.isCustom);
-                      console.log(`⚙️ Found ${customRoutines.length} custom routines to delete`);
+                      await clearCustomRoutines();
+                      await clearCustomBundles();
                       
-                      for (const routine of customRoutines) {
-                        await storageService.deleteRoutine(routine.id);
-                        console.log(`✅ Deleted custom routine: ${routine.name}`);
-                      }
-                      
-                      // Clear all custom bundles (keep only default ones)
-                      const allBundles = await storageService.getAllRoutineBundles();
-                      const customBundles = allBundles.filter(b => !b.isDefault);
-                      console.log(`⚙️ Found ${customBundles.length} custom bundles to delete`);
-                      
-                      for (const bundle of customBundles) {
-                        await storageService.deleteRoutineBundle(bundle.id);
-                        console.log(`✅ Deleted custom bundle: ${bundle.name}`);
-                      }
-                      
-                      // Also reset the default bundle to clear any references to deleted routines
-                      const defaultBundle = allBundles.find(b => b.isDefault);
-                      if (defaultBundle) {
-                        console.log(`⚙️ Resetting default bundle: ${defaultBundle.name}`);
-                        await storageService.deleteRoutineBundle(defaultBundle.id);
-                        console.log(`✅ Default bundle reset`);
-                      }
-                      
-                      console.log('✅ Complete data wipe finished successfully');
+                      if (__DEV__) console.log('✅ Complete data wipe finished successfully');
                       
                       Alert.alert(
                         'Success', 
@@ -169,10 +174,11 @@ const SettingsScreen: React.FC = () => {
                         [{ 
                           text: 'OK', 
                           onPress: () => {
-                            console.log('⚙️ Navigating to Home after complete reset');
-                            // Force complete refresh by navigating through multiple screens
-                            navigation.navigate('Workout');
-                            setTimeout(() => navigation.navigate('Home'), 100);
+                            if (__DEV__) console.log('⚙️ Navigating to Home after complete reset');
+                            navigation.reset({
+                              index: 0,
+                              routes: [{ name: 'Home' }],
+                            });
                           }
                         }]
                       );
@@ -191,21 +197,21 @@ const SettingsScreen: React.FC = () => {
   };
 
   const handleExportData = () => {
-    console.log('⚙️ SettingsScreen - Export Data button pressed');
+    if (__DEV__) console.log('⚙️ SettingsScreen - Export Data button pressed');
     Alert.alert(
       'Export Data',
       'Data export feature is coming soon! This will allow you to backup your workout data.',
-      [{ text: 'OK', onPress: () => console.log('⚙️ Export data acknowledged') }]
+      [{ text: 'OK', onPress: () => { if (__DEV__) console.log('⚙️ Export data acknowledged'); } }]
     );
   };
 
   const handleNotificationToggle = (value: boolean) => {
-    console.log('⚙️ SettingsScreen - Notifications toggled:', value);
+    if (__DEV__) console.log('⚙️ SettingsScreen - Notifications toggled:', value);
     setNotificationsEnabled(value);
   };
 
   const handleAutoBackupToggle = (value: boolean) => {
-    console.log('⚙️ SettingsScreen - Auto backup toggled:', value);
+    if (__DEV__) console.log('⚙️ SettingsScreen - Auto backup toggled:', value);
     setAutoBackup(value);
   };
 

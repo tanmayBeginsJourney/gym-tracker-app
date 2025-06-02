@@ -40,21 +40,6 @@ const ProgressScreen: React.FC = () => {
     }
   };
 
-  const getWeeklyStats = () => {
-    console.log('📊 ProgressScreen - Calculating weekly stats...');
-    const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-    
-    const weeklyWorkouts = workouts.filter(w => new Date(w.date) >= oneWeekAgo);
-    console.log(`📊 ProgressScreen - Found ${weeklyWorkouts.length} workouts in last 7 days`);
-    
-    return {
-      totalWorkouts: weeklyWorkouts.length,
-      totalSets: weeklyWorkouts.reduce((sum, w) => sum + w.exercises.reduce((s, e) => s + e.sets.length, 0), 0),
-      totalReps: weeklyWorkouts.reduce((sum, w) => sum + w.exercises.reduce((s, e) => s + e.sets.reduce((r, set) => r + (set.reps || 0), 0), 0), 0),
-    };
-  };
-
   return (
     <View style={styles.container}>
       <SidebarNav currentRoute="Progress" />

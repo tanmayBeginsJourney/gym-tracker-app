@@ -105,6 +105,9 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ currentRoute }) => {
       style={styles.sidebarButton} 
       onPress={openSidebar}
       activeOpacity={0.7}
+      accessibilityLabel="Open sidebar navigation"
+      accessibilityRole="button"
+      accessibilityHint="Opens the sidebar navigation menu"
     >
       <Ionicons name="menu" size={24} color="#2d3748" />
     </TouchableOpacity>
