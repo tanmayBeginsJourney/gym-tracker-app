@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,28 +7,37 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { aiService } from '../services/aiService';
 import { storageService } from '../services/storage';
+import SidebarNav from '../components/SidebarNav';
 import { ChatMessage } from '../types';
 
 const ChatScreen: React.FC = () => {
+  console.log('🤖 ChatScreen - Component mounted');
+  
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
+    console.log('🤖 ChatScreen - useEffect triggered, loading chat history...');
     loadChatHistory();
     initializeChat();
   }, []);
 
   const loadChatHistory = async () => {
     try {
+      console.log('🤖 ChatScreen - Loading chat history from storage...');
       const history = await storageService.getChatHistory();
+      console.log(`🤖 ChatScreen - Loaded ${history.length} messages from history`);
       setMessages(history);
     } catch (error) {
-      console.error('Error loading chat history:', error);
+      console.error('❌ ChatScreen - Error loading chat history:', error);
     }
   };
 
@@ -49,25 +58,36 @@ const ChatScreen: React.FC = () => {
   };
 
   const sendMessage = async () => {
-    if (!inputText.trim() || isLoading) return;
+    if (!inputText.trim()) {
+      console.log('🤖 ChatScreen - Empty message, ignoring send');
+      return;
+    }
 
+    console.log('🤖 ChatScreen - Sending message:', inputText.substring(0, 50) + '...');
     const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
+      id: Date.now().toString(),
       role: 'user',
       content: inputText.trim(),
-      timestamp: new Date()
+      timestamp: new Date(),
     };
 
-    // Add user message immediately
-    setMessages(prev => [...prev, userMessage]);
-    await storageService.saveChatMessage(userMessage);
-    
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
     setInputText('');
     setIsLoading(true);
 
+    // Save user message
     try {
-      // Get AI response
-      const aiResponse = await aiService.generateResponseWithDelay(userMessage.content);
+      await storageService.saveChatMessage(userMessage);
+      console.log('🤖 ChatScreen - User message saved to storage');
+    } catch (error) {
+      console.error('❌ ChatScreen - Error saving user message:', error);
+    }
+
+    try {
+      console.log('🤖 ChatScreen - Requesting AI response...');
+      const aiResponse = await aiService.generateResponseWithDelay(inputText.trim());
+      console.log('🤖 ChatScreen - AI response received:', aiResponse.substring(0, 100) + '...');
       
       const assistantMessage: ChatMessage = {
         id: `assistant-${Date.now()}`,
@@ -78,11 +98,21 @@ const ChatScreen: React.FC = () => {
 
       setMessages(prev => [...prev, assistantMessage]);
       await storageService.saveChatMessage(assistantMessage);
+      console.log('🤖 ChatScreen - AI message saved to storage');
     } catch (error) {
-      console.error('Error getting AI response:', error);
-      Alert.alert('Error', 'Failed to get response from AI coach');
+      console.error('❌ ChatScreen - AI response error:', error);
+      const errorMessage: ChatMessage = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: 'I apologize, but I\'m having trouble connecting right now. The AI service is temporarily unavailable. You can still track your workouts normally!',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      await storageService.saveChatMessage(errorMessage);
+      console.log('🤖 ChatScreen - Error message saved to storage');
     } finally {
       setIsLoading(false);
+      console.log('🤖 ChatScreen - Message sending process completed');
     }
   };
 
@@ -108,37 +138,41 @@ const ChatScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <FlatList
-        data={messages}
-        renderItem={renderMessage}
-        keyExtractor={(item) => item.id}
-        style={styles.messagesList}
-        contentContainerStyle={styles.messagesContainer}
-      />
-      
-      {isLoading && (
-        <View style={styles.loadingIndicator}>
-          <Text style={styles.loadingText}>AI coach is thinking...</Text>
-        </View>
-      )}
-
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.textInput}
-          value={inputText}
-          onChangeText={setInputText}
-          placeholder="Ask your AI fitness coach..."
-          multiline
-          maxLength={500}
-          editable={!isLoading}
+      <SidebarNav currentRoute="Chat" />
+      <View style={styles.content}>
+        <FlatList
+          data={messages}
+          renderItem={renderMessage}
+          keyExtractor={(item) => item.id}
+          style={styles.messagesList}
+          contentContainerStyle={styles.messagesContainer}
+          ref={flatListRef}
         />
-        <TouchableOpacity
-          style={[styles.sendButton, (!inputText.trim() || isLoading) && styles.sendButtonDisabled]}
-          onPress={sendMessage}
-          disabled={!inputText.trim() || isLoading}
-        >
-          <Ionicons name="send" size={20} color="#ffffff" />
-        </TouchableOpacity>
+        
+        {isLoading && (
+          <View style={styles.loadingIndicator}>
+            <Text style={styles.loadingText}>AI coach is thinking...</Text>
+          </View>
+        )}
+
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.textInput}
+            value={inputText}
+            onChangeText={setInputText}
+            placeholder="Ask your AI fitness coach..."
+            multiline
+            maxLength={500}
+            editable={!isLoading}
+          />
+          <TouchableOpacity
+            style={[styles.sendButton, (!inputText.trim() || isLoading) && styles.sendButtonDisabled]}
+            onPress={sendMessage}
+            disabled={!inputText.trim() || isLoading}
+          >
+            <Ionicons name="send" size={20} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -148,6 +182,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f7fafc',
+  },
+  content: {
+    flex: 1,
+    paddingTop: 80,
   },
   messagesList: {
     flex: 1,

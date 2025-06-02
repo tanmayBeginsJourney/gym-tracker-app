@@ -17,6 +17,7 @@ import ActiveWorkoutScreen from './ActiveWorkoutScreen';
 import WorkoutCompletionScreen from './WorkoutCompletionScreen';
 import type { RootStackParamList } from '../types';
 import Constants from 'expo-constants';
+import SidebarNav from '../components/SidebarNav';
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;
 
@@ -27,6 +28,8 @@ const IS_DEMO_MODE = __DEV__ || DEMO_MODE === 'true';
 type HomeState = 'dashboard' | 'active' | 'complete';
 
 const HomeScreen: React.FC = () => {
+  console.log('🏠 HomeScreen - Component mounted');
+  
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const [homeState, setHomeState] = useState<HomeState>('dashboard');
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -350,212 +353,225 @@ const HomeScreen: React.FC = () => {
   // Render active workout screen
   if (homeState === 'active' && selectedRoutine) {
     return (
-      <ActiveWorkoutScreen
-        routine={selectedRoutine}
-        onComplete={onWorkoutComplete}
-        onCancel={onWorkoutCancel}
-      />
+      <View style={styles.container}>
+        <SidebarNav currentRoute="Home" />
+        <ScrollView style={styles.scrollContent}>
+          <ActiveWorkoutScreen
+            routine={selectedRoutine}
+            onComplete={onWorkoutComplete}
+            onCancel={onWorkoutCancel}
+          />
+        </ScrollView>
+      </View>
     );
   }
 
   // Render workout completion screen
   if (homeState === 'complete' && completedWorkout) {
     return (
-      <WorkoutCompletionScreen
-        workout={completedWorkout}
-        onDismiss={onCompletionDismiss}
-      />
+      <View style={styles.container}>
+        <SidebarNav currentRoute="Home" />
+        <ScrollView style={styles.scrollContent}>
+          <WorkoutCompletionScreen
+            workout={completedWorkout}
+            onDismiss={onCompletionDismiss}
+          />
+        </ScrollView>
+      </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
-      {/* Welcome Section */}
-      <View style={styles.welcomeSection}>
-        <Text style={styles.welcomeText}>
-          {getDayOfWeekText()}{userProfile ? `, ${userProfile.name}` : ''}! 💪
-        </Text>
-        <Text style={styles.subtitleText}>
-          {totalWorkouts === 0 
-            ? "Ready to start your fitness journey?"
-            : streak > 0
-            ? `${streak} day streak! Keep it going! 🔥`
-            : `You've completed ${totalWorkouts} workout${totalWorkouts === 1 ? '' : 's'}!`
-          }
-        </Text>
-      </View>
-
-      {/* Bundle Status */}
-      {defaultBundle ? (
-        <View style={styles.bundleStatus}>
-          <View style={styles.bundleInfo}>
-            <Ionicons name="calendar-outline" size={16} color="#4CAF50" />
-            <Text style={styles.bundleText}>
-              Active Schedule: <Text style={styles.bundleName}>{defaultBundle.name}</Text>
-            </Text>
-          </View>
-          <TouchableOpacity onPress={navigateToBundleManager}>
-            <Ionicons name="chevron-forward" size={16} color="#666" />
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={styles.noBundlePrompt}>
-          <Text style={styles.noBundleText}>No workout schedule set</Text>
-          <TouchableOpacity 
-            style={styles.setBundleButton}
-            onPress={navigateToBundleManager}
-          >
-            <Text style={styles.setBundleButtonText}>Create Schedule</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Today's Workout Hero Section */}
-      {todaysRoutine ? (
-        <TouchableOpacity style={styles.workoutHeroCard} onPress={startTodaysWorkout}>
-          <View style={styles.workoutHeroHeader}>
-            <Ionicons name="fitness" size={32} color="#ffffff" />
-            <Text style={styles.workoutHeroTitle}>START TODAY'S WORKOUT</Text>
-          </View>
-          <Text style={styles.workoutHeroName}>{todaysRoutine.name}</Text>
-          <View style={styles.workoutHeroDetails}>
-            <View style={styles.workoutHeroDetail}>
-              <Ionicons name="barbell" size={16} color="#e2e8f0" />
-              <Text style={styles.workoutHeroDetailText}>
-                {todaysRoutine.exercises.length} exercises
-              </Text>
-            </View>
-            <View style={styles.workoutHeroDetail}>
-              <Ionicons name="time" size={16} color="#e2e8f0" />
-              <Text style={styles.workoutHeroDetailText}>
-                ~{todaysRoutine.estimatedDuration} min
-              </Text>
-            </View>
-            <View style={styles.workoutHeroDetail}>
-              <Ionicons name="trending-up" size={16} color="#e2e8f0" />
-              <Text style={styles.workoutHeroDetailText}>
-                {todaysRoutine.difficulty}
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.workoutHeroDescription}>
-            {todaysRoutine.description}
+    <View style={styles.container}>
+      <SidebarNav currentRoute="Home" />
+      <ScrollView style={styles.scrollContent}>
+        {/* Welcome Section */}
+        <View style={styles.welcomeSection}>
+          <Text style={styles.welcomeText}>
+            {getDayOfWeekText()}{userProfile ? `, ${userProfile.name}` : ''}! 💪
           </Text>
-        </TouchableOpacity>
-      ) : (
-        <View style={styles.restDayCard}>
-          <View style={styles.restDayHeader}>
-            <Ionicons name="bed" size={32} color="#4a5568" />
-            <Text style={styles.restDayTitle}>Rest Day</Text>
-          </View>
-          <Text style={styles.restDayText}>
-            Great job on your recent workouts! Today is for recovery.
+          <Text style={styles.subtitleText}>
+            {totalWorkouts === 0 
+              ? "Ready to start your fitness journey?"
+              : streak > 0
+              ? `${streak} day streak! Keep it going!`
+              : `You've completed ${totalWorkouts} workout${totalWorkouts === 1 ? '' : 's'}!`
+            }
           </Text>
-          <View style={styles.restDayButtons}>
-            <TouchableOpacity 
-              style={[styles.customWorkoutButton, styles.restDayButtonChild]} 
-              onPress={navigateToWorkouts}
-            >
-              <Ionicons name="fitness" size={20} color="#ffffff" />
-              <Text style={styles.customWorkoutText}>Start Custom Workout</Text>
+        </View>
+
+        {/* Bundle Status */}
+        {defaultBundle ? (
+          <View style={styles.bundleStatus}>
+            <View style={styles.bundleInfo}>
+              <Ionicons name="calendar-outline" size={16} color="#4CAF50" />
+              <Text style={styles.bundleText}>
+                Active Schedule: <Text style={styles.bundleName}>{defaultBundle.name}</Text>
+              </Text>
+            </View>
+            <TouchableOpacity onPress={navigateToBundleManager}>
+              <Ionicons name="chevron-forward" size={16} color="#666" />
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.browseRoutinesButton} 
-              onPress={navigateToWorkouts}
-            >
-              <Text style={styles.browseRoutinesText}>Browse Available Routines</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {/* Profile Setup */}
-      {!userProfile && (
-        <TouchableOpacity style={styles.setupCard} onPress={setupProfile}>
-          <Ionicons name="person-add" size={24} color="#3182ce" />
-          <Text style={styles.setupTitle}>Setup Your Profile</Text>
-          <Text style={styles.setupText}>
-            Add your details to get personalized recommendations
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Quick Stats */}
-      <View style={styles.statsSection}>
-        <Text style={styles.sectionTitle}>Quick Stats</Text>
-        <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <Ionicons name="fitness" size={24} color="#3182ce" />
-            <Text style={styles.statNumber}>{totalWorkouts}</Text>
-            <Text style={styles.statLabel}>Total Workouts</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Ionicons name="flame" size={24} color="#ff8c00" />
-            <Text style={styles.statNumber}>{streak}</Text>
-            <Text style={styles.statLabel}>Day Streak</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Ionicons name="trophy" size={24} color="#ffd700" />
-            <Text style={styles.statNumber}>
-              {Math.max(0, totalWorkouts - 1)}
-            </Text>
-            <Text style={styles.statLabel}>Personal Records</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Recent Workouts */}
-      <View style={styles.workoutsSection}>
-        <Text style={styles.sectionTitle}>Recent Workouts</Text>
-        {recentWorkouts.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="barbell" size={48} color="#cbd5e0" />
-            <Text style={styles.emptyStateText}>No workouts yet</Text>
-            <Text style={styles.emptyStateSubtext}>
-              {todaysRoutine ? 'Tap "START TODAY\'S WORKOUT" above!' : 'Tap the Workout tab to get started!'}
-            </Text>
           </View>
         ) : (
-          recentWorkouts.map((workout, index) => (
-            <View key={workout.id} style={styles.workoutCard}>
-              <View style={styles.workoutHeader}>
-                <Text style={styles.workoutDate}>
-                  {formatDate(workout.date)}
-                </Text>
-                <Text style={styles.workoutDuration}>
-                  {workout.duration} min
+          <View style={styles.noBundlePrompt}>
+            <Text style={styles.noBundleText}>No workout schedule set</Text>
+            <TouchableOpacity 
+              style={styles.setBundleButton}
+              onPress={navigateToBundleManager}
+            >
+              <Text style={styles.setBundleButtonText}>Create Schedule</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Today's Workout Hero Section */}
+        {todaysRoutine ? (
+          <TouchableOpacity style={styles.workoutHeroCard} onPress={startTodaysWorkout}>
+            <View style={styles.workoutHeroHeader}>
+              <Ionicons name="fitness" size={32} color="#ffffff" />
+              <Text style={styles.workoutHeroTitle}>Start Today's Workout!</Text>
+            </View>
+            <Text style={styles.workoutHeroName}>{todaysRoutine.name}</Text>
+            <View style={styles.workoutHeroDetails}>
+              <View style={styles.workoutHeroDetail}>
+                <Ionicons name="barbell" size={16} color="#e2e8f0" />
+                <Text style={styles.workoutHeroDetailText}>
+                  {todaysRoutine.exercises.length} exercises
                 </Text>
               </View>
-              <Text style={styles.workoutName}>
-                {workout.routineName || 'Custom Workout'}
+              <View style={styles.workoutHeroDetail}>
+                <Ionicons name="time" size={16} color="#e2e8f0" />
+                <Text style={styles.workoutHeroDetailText}>
+                  ~{todaysRoutine.estimatedDuration} min
+                </Text>
+              </View>
+              <View style={styles.workoutHeroDetail}>
+                <Ionicons name="trending-up" size={16} color="#e2e8f0" />
+                <Text style={styles.workoutHeroDetailText} numberOfLines={1} ellipsizeMode="tail">
+                  {todaysRoutine.difficulty}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.workoutHeroDescription}>
+              {todaysRoutine.description}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.restDayCard}>
+            <View style={styles.restDayHeader}>
+              <Ionicons name="bed" size={32} color="#4a5568" />
+              <Text style={styles.restDayTitle}>Rest Day</Text>
+            </View>
+            <Text style={styles.restDayText}>
+              Great job on your recent workouts! Today is for recovery.
+            </Text>
+            <View style={styles.restDayButtons}>
+              <TouchableOpacity 
+                style={[styles.customWorkoutButton, styles.restDayButtonChild]} 
+                onPress={navigateToWorkouts}
+              >
+                <Ionicons name="fitness" size={20} color="#ffffff" />
+                <Text style={styles.customWorkoutText}>Start Custom Workout</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.browseRoutinesButton} 
+                onPress={navigateToWorkouts}
+              >
+                <Text style={styles.browseRoutinesText}>Browse Available Routines</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Profile Setup */}
+        {!userProfile && (
+          <TouchableOpacity style={styles.setupCard} onPress={setupProfile}>
+            <Ionicons name="person-add" size={24} color="#3182ce" />
+            <Text style={styles.setupTitle}>Setup Your Profile</Text>
+            <Text style={styles.setupText}>
+              Add your details to get personalized recommendations
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Quick Stats */}
+        <View style={styles.statsSection}>
+          <Text style={styles.sectionTitle}>Quick Stats</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <Ionicons name="fitness" size={24} color="#3182ce" />
+              <Text style={styles.statNumber}>{totalWorkouts}</Text>
+              <Text style={styles.statLabel}>Total Workouts</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="flame" size={24} color="#ff8c00" />
+              <Text style={styles.statNumber}>{streak}</Text>
+              <Text style={styles.statLabel}>Day Streak</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="trophy" size={24} color="#ffd700" />
+              <Text style={styles.statNumber}>
+                {Math.max(0, totalWorkouts - 1)}
               </Text>
-              <Text style={styles.workoutExercises}>
-                {workout.exercises.length} exercise{workout.exercises.length === 1 ? '' : 's'}
+              <Text style={styles.statLabel}>Personal Records</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Recent Workouts */}
+        <View style={styles.workoutsSection}>
+          <Text style={styles.sectionTitle}>Recent Workouts</Text>
+          {recentWorkouts.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="barbell" size={48} color="#cbd5e0" />
+              <Text style={styles.emptyStateText}>No workouts yet</Text>
+              <Text style={styles.emptyStateSubtext}>
+                {todaysRoutine ? 'Tap "Start Today\'s Workout!" above!' : 'Tap the Workout tab to get started!'}
               </Text>
             </View>
-          ))
-        )}
-      </View>
-
-      {/* Quick Actions */}
-      <View style={styles.actionsSection}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <View style={styles.actionGrid}>
-          <TouchableOpacity style={styles.actionCard} onPress={navigateToWorkouts}>
-            <Ionicons name="add-circle" size={32} color="#3182ce" />
-            <Text style={styles.actionText}>Custom Workout</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionCard}>
-            <Ionicons name="restaurant" size={32} color="#ff8c00" />
-            <Text style={styles.actionText}>Log Meal</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionCard} onPress={navigateToAI}>
-            <Ionicons name="chatbubble" size={32} color="#9f7aea" />
-            <Text style={styles.actionText}>Ask AI Coach</Text>
-          </TouchableOpacity>
+          ) : (
+            recentWorkouts.map((workout, index) => (
+              <View key={workout.id} style={styles.workoutCard}>
+                <View style={styles.workoutHeader}>
+                  <Text style={styles.workoutDate}>
+                    {formatDate(workout.date)}
+                  </Text>
+                  <Text style={styles.workoutDuration}>
+                    {workout.duration} min
+                  </Text>
+                </View>
+                <Text style={styles.workoutName}>
+                  {workout.routineName || 'Custom Workout'}
+                </Text>
+                <Text style={styles.workoutExercises}>
+                  {workout.exercises.length} exercise{workout.exercises.length === 1 ? '' : 's'}
+                </Text>
+              </View>
+            ))
+          )}
         </View>
-      </View>
-    </ScrollView>
+
+        {/* Quick Actions */}
+        <View style={styles.actionsSection}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.actionGrid}>
+            <TouchableOpacity style={styles.actionCard} onPress={navigateToWorkouts}>
+              <Ionicons name="add-circle" size={32} color="#3182ce" />
+              <Text style={styles.actionText}>Custom Workout</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionCard}>
+              <Ionicons name="restaurant" size={32} color="#ff8c00" />
+              <Text style={styles.actionText}>Log Meal</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionCard} onPress={navigateToAI}>
+              <Ionicons name="chatbubble" size={32} color="#9f7aea" />
+              <Text style={styles.actionText}>Ask AI Coach</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+    </View>
   );
 };
 
@@ -563,7 +579,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
-    paddingTop: 50,
+  },
+  scrollContent: {
+    paddingTop: 80, // Space for sidebar button
   },
   centerContainer: {
     flex: 1,
@@ -678,16 +696,21 @@ const styles = StyleSheet.create({
   workoutHeroDetails: {
     flexDirection: 'row',
     marginBottom: 12,
+    flexWrap: 'wrap',
   },
   workoutHeroDetail: {
     flexDirection: 'row',
     alignItems: 'center',
     marginRight: 16,
+    marginBottom: 4,
+    flex: 0,
+    minWidth: 0,
   },
   workoutHeroDetailText: {
     fontSize: 14,
     color: '#e2e8f0',
     marginLeft: 4,
+    flexShrink: 1,
   },
   workoutHeroDescription: {
     fontSize: 16,
@@ -882,7 +905,8 @@ const styles = StyleSheet.create({
   },
   actionsSection: {
     paddingHorizontal: 20,
-    marginBottom: 40,
+    marginBottom: 80,
+    paddingBottom: 40,
   },
   actionGrid: {
     flexDirection: 'row',

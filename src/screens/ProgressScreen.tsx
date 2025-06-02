@@ -1,15 +1,67 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Dimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { storageService } from '../services/storage';
+import SidebarNav from '../components/SidebarNav';
+import type { Workout } from '../types';
+
+const { width } = Dimensions.get('window');
 
 const ProgressScreen: React.FC = () => {
+  console.log('📊 ProgressScreen - Component mounted');
+  
+  const [workouts, setWorkouts] = useState<Workout[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    console.log('📊 ProgressScreen - useEffect triggered, loading data...');
+    loadProgressData();
+  }, []);
+
+  const loadProgressData = async () => {
+    try {
+      console.log('📊 ProgressScreen - Starting data load...');
+      setLoading(true);
+      const allWorkouts = await storageService.getAllWorkouts();
+      console.log(`📊 ProgressScreen - Loaded ${allWorkouts.length} workouts`);
+      setWorkouts(allWorkouts);
+    } catch (error) {
+      console.error('❌ ProgressScreen - Error loading data:', error);
+    } finally {
+      setLoading(false);
+      console.log('📊 ProgressScreen - Data loading completed');
+    }
+  };
+
+  const getWeeklyStats = () => {
+    console.log('📊 ProgressScreen - Calculating weekly stats...');
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    
+    const weeklyWorkouts = workouts.filter(w => new Date(w.date) >= oneWeekAgo);
+    console.log(`📊 ProgressScreen - Found ${weeklyWorkouts.length} workouts in last 7 days`);
+    
+    return {
+      totalWorkouts: weeklyWorkouts.length,
+      totalSets: weeklyWorkouts.reduce((sum, w) => sum + w.exercises.reduce((s, e) => s + e.sets.length, 0), 0),
+      totalReps: weeklyWorkouts.reduce((sum, w) => sum + w.exercises.reduce((s, e) => s + e.sets.reduce((r, set) => r + (set.reps || 0), 0), 0), 0),
+    };
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Progress Screen</Text>
-      <Text style={styles.subtitle}>Track your gains! 📈</Text>
+      <SidebarNav currentRoute="Progress" />
+      <View style={styles.content}>
+        <Text style={styles.title}>Progress Screen</Text>
+        <Text style={styles.subtitle}>Track your gains! 📈</Text>
+      </View>
     </View>
   );
 };
@@ -17,9 +69,13 @@ const ProgressScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f7fafc',
+  },
+  content: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f7fafc',
+    paddingTop: 80,
   },
   title: {
     fontSize: 24,

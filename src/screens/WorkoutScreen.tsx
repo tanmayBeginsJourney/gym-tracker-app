@@ -15,6 +15,7 @@ import { storageService } from '../services/storage';
 import { defaultRoutines } from '../data/exercises';
 import ActiveWorkoutScreen from './ActiveWorkoutScreen';
 import WorkoutCompletionScreen from './WorkoutCompletionScreen';
+import SidebarNav from '../components/SidebarNav';
 
 type WorkoutState = 'browse' | 'active' | 'complete';
 
@@ -240,16 +241,33 @@ const WorkoutScreen: React.FC<Props> = ({ navigation }) => {
   // Render active workout screen
   if (workoutState === 'active' && selectedRoutine) {
     return (
-      <ActiveWorkoutScreen
-        routine={selectedRoutine}
-        onComplete={onWorkoutComplete}
-        onCancel={onWorkoutCancel}
-      />
+      <View style={styles.container}>
+        <SidebarNav currentRoute="Workout" />
+        <ActiveWorkoutScreen
+          routine={selectedRoutine}
+          onComplete={onWorkoutComplete}
+          onCancel={onWorkoutCancel}
+        />
+      </View>
+    );
+  }
+
+  // Render workout completion screen
+  if (workoutState === 'complete' && completedWorkout) {
+    return (
+      <View style={styles.container}>
+        <SidebarNav currentRoute="Workout" />
+        <WorkoutCompletionScreen
+          workout={completedWorkout}
+          onDismiss={onCompletionDismiss}
+        />
+      </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      <SidebarNav currentRoute="Workout" />
       <ScrollView style={styles.content}>
         {/* Header */}
         <View style={styles.header}>
@@ -500,17 +518,10 @@ const WorkoutScreen: React.FC<Props> = ({ navigation }) => {
             ))}
           </View>
         )}
-      </ScrollView>
 
-      {/* Workout Completion Modal */}
-      <Modal visible={workoutState === 'complete'} transparent>
-        {completedWorkout && (
-          <WorkoutCompletionScreen
-            workout={completedWorkout}
-            onDismiss={onCompletionDismiss}
-          />
-        )}
-      </Modal>
+        {/* Bottom Spacer */}
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
     </View>
   );
 };
@@ -532,6 +543,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    paddingTop: 80,
   },
   header: {
     padding: 20,
@@ -770,7 +782,7 @@ const styles = StyleSheet.create({
   // Recent Section
   recentSection: {
     padding: 16,
-    paddingBottom: 32,
+    paddingBottom: 80,
   },
   recentCard: {
     backgroundColor: '#ffffff',
@@ -868,6 +880,9 @@ const styles = StyleSheet.create({
   },
   routineActionButton: {
     padding: 8,
+  },
+  bottomSpacer: {
+    height: 80,
   },
 });
 
