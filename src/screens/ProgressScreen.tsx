@@ -40,6 +40,41 @@ const ProgressScreen: React.FC = () => {
     }
   };
 
+  const getWeeklyStats = (workouts: Workout[]) => {
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    
+    const weeklyWorkouts = workouts.filter(workout => 
+      new Date(workout.date) >= oneWeekAgo
+    );
+    
+    const totalVolume = weeklyWorkouts.reduce((total, workout) => {
+      const workoutVolume = workout.exercises.reduce((exerciseTotal, exercise) => {
+        const setVolume = exercise.sets.reduce((setTotal, set) => {
+          return setTotal + (set.weight * set.reps);
+        }, 0);
+        return exerciseTotal + setVolume;
+      }, 0);
+      return total + workoutVolume;
+    }, 0);
+    
+    const totalDuration = weeklyWorkouts.reduce((total, workout) => {
+      return total + (workout.duration || 0);
+    }, 0);
+    
+    if (__DEV__) {
+      console.log(`📊 Weekly stats: ${weeklyWorkouts.length} workouts, ${totalVolume}kg volume, ${totalDuration}min duration`);
+    }
+    
+    return {
+      workoutCount: weeklyWorkouts.length,
+      totalVolume,
+      averageVolume: weeklyWorkouts.length > 0 ? totalVolume / weeklyWorkouts.length : 0,
+      totalDuration,
+      averageDuration: weeklyWorkouts.length > 0 ? totalDuration / weeklyWorkouts.length : 0,
+    };
+  };
+
   return (
     <View style={styles.container}>
       <SidebarNav currentRoute="Progress" />
