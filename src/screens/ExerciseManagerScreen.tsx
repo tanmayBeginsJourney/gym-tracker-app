@@ -13,18 +13,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Exercise } from '../types';
+import { Exercise, RootStackParamList } from '../types';
 import { storageService } from '../services/storage';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RouteProp } from '@react-navigation/native';
 
 interface Props {
-  navigation: any;
-  route: {
-    params?: {
-      editingExercise?: Exercise;
-      fromRoutineBuilder?: boolean;
-      routineBuilderCallback?: string;
-    };
-  };
+  navigation: StackNavigationProp<RootStackParamList, 'ExerciseManager'>;
+  route: RouteProp<RootStackParamList, 'ExerciseManager'>;
 }
 
 const EXERCISE_CATEGORIES = [
@@ -216,7 +212,7 @@ export default function ExerciseManagerScreen({ navigation, route }: Props) {
       const muscleGroups = exerciseMuscleGroups.split(',').map(mg => mg.trim()).filter(mg => mg);
       
       const exercise: Exercise = {
-        id: isEditingExercise ? editingExerciseId! : `exercise_${Date.now()}`,
+        id: isEditingExercise ? editingExerciseId! : `exercise_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         name: exerciseName.trim(),
         category: exerciseCategory,
         muscleGroups,

@@ -86,7 +86,7 @@ export default function RoutineBuilderScreen({ navigation, route }: Props) {
     if (selectedExercise) {
       addExercise(selectedExercise);
       // Clear the parameter to prevent re-adding on re-renders
-      navigation.setParams({ selectedExercise: undefined });
+      navigation.setParams({ selectedExercise: null });
     }
   }, [selectedExercise, navigation, addExercise]);
 

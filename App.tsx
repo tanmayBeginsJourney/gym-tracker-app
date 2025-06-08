@@ -35,16 +35,31 @@ export default function App() {
     try {
       console.log('🚀 App.tsx - Starting app initialization...');
       
-      // Check if exercise database needs update (versioned migration)
+      // Smart exercise database migration - preserve custom exercises
       const existingExercises = await storageService.getAllExercises();
-      const needsUpdate = existingExercises.length === 0 || existingExercises.length < defaultExercises.length;
       
-      if (needsUpdate) {
-        console.log(`🚀 App.tsx - Updating exercise database: ${existingExercises.length} → ${defaultExercises.length} exercises`);
+      if (existingExercises.length === 0) {
+        // First time setup - load all default exercises
+        console.log(`🚀 App.tsx - Initial setup: Loading ${defaultExercises.length} default exercises`);
         await storageService.saveExercises(defaultExercises);
-        console.log('✅ Exercise database updated');
+        console.log('✅ Initial exercise database loaded');
       } else {
-        console.log(`✅ Exercise database current: ${existingExercises.length} exercises`);
+        // Check for missing default exercises by ID comparison
+        const existingIds = new Set(existingExercises.map(ex => ex.id));
+        const missingDefaults = defaultExercises.filter(ex => !existingIds.has(ex.id));
+        
+        if (missingDefaults.length > 0) {
+          console.log(`🚀 App.tsx - Adding ${missingDefaults.length} missing default exercises (preserving ${existingExercises.length} existing)`);
+          
+          // Add only missing default exercises without overwriting existing ones
+          for (const missingExercise of missingDefaults) {
+            await storageService.saveExercise(missingExercise);
+          }
+          
+          console.log(`✅ Exercise database updated: ${missingDefaults.length} new defaults added`);
+        } else {
+          console.log(`✅ Exercise database current: ${existingExercises.length} exercises (${existingExercises.filter(ex => ex.isCustom).length} custom)`);
+        }
       }
 
       // Check if routines are already loaded

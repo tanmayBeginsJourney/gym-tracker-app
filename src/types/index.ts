@@ -214,12 +214,15 @@ export type RootStackParamList = {
   WorkoutMain: undefined;
   RoutineBuilder: {
     editingRoutine?: WorkoutRoutine;
+    selectedExercise?: Exercise;
   };
   BundleManager: {
     editingBundle?: RoutineBundle;
   };
   ExerciseManager: {
     editingExercise?: Exercise;
+    fromRoutineBuilder?: boolean;
+    routineBuilderCallback?: string;
   };
   Progress: undefined;
   Nutrition: undefined;

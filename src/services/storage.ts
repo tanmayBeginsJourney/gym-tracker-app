@@ -24,6 +24,9 @@ const STORAGE_KEYS = {
 } as const;
 
 class StorageService {
+  // Race condition protection: Queue for exercise save operations
+  private exerciseSaveQueue: Promise<void> = Promise.resolve();
+
   // Generic storage methods
   private async setItem<T>(key: string, value: T): Promise<void> {
     try {
@@ -132,30 +135,32 @@ class StorageService {
     return exercises.find(e => e.id === exerciseId) || null;
   }
 
-  // Sprint 2.2: Custom Exercise Management
+  // Sprint 2.2: Custom Exercise Management with race condition protection
   async saveExercise(exercise: Exercise): Promise<void> {
-    try {
-      if (__DEV__) console.log('🏋️ ExerciseManager - Saving exercise:', exercise.name);
-      
-      // TODO: Optimize for race conditions and storage size
-      // Current implementation: read-all -> modify -> write-all has race condition risk
-      // Future: Move to per-exercise map keyed by id or use batched debounced writes
-      const exercises = await this.getAllExercises();
-      const existingIndex = exercises.findIndex(e => e.id === exercise.id);
-      
-      if (existingIndex >= 0) {
-        exercises[existingIndex] = exercise;
-        if (__DEV__) console.log('✏️ ExerciseManager - Updated existing exercise:', exercise.name);
-      } else {
-        exercises.push(exercise);
-        if (__DEV__) console.log('✨ ExerciseManager - Created new exercise:', exercise.name);
+    // Queue this save operation to prevent race conditions
+    this.exerciseSaveQueue = this.exerciseSaveQueue.then(async () => {
+      try {
+        if (__DEV__) console.log('🏋️ ExerciseManager - Saving exercise:', exercise.name);
+        
+        const exercises = await this.getAllExercises();
+        const existingIndex = exercises.findIndex(e => e.id === exercise.id);
+        
+        if (existingIndex >= 0) {
+          exercises[existingIndex] = exercise;
+          if (__DEV__) console.log('✏️ ExerciseManager - Updated existing exercise:', exercise.name);
+        } else {
+          exercises.push(exercise);
+          if (__DEV__) console.log('✨ ExerciseManager - Created new exercise:', exercise.name);
+        }
+        
+        return this.setItem(STORAGE_KEYS.EXERCISES, exercises);
+      } catch (error) {
+        console.error('❌ ExerciseManager - Error saving exercise:', error);
+        throw error;
       }
-      
-      return this.setItem(STORAGE_KEYS.EXERCISES, exercises);
-    } catch (error) {
-      console.error('❌ ExerciseManager - Error saving exercise:', error);
-      throw error;
-    }
+    });
+    
+    return this.exerciseSaveQueue;
   }
 
   async deleteExercise(exerciseId: string): Promise<void> {
