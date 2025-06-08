@@ -136,6 +136,10 @@ class StorageService {
   async saveExercise(exercise: Exercise): Promise<void> {
     try {
       if (__DEV__) console.log('🏋️ ExerciseManager - Saving exercise:', exercise.name);
+      
+      // TODO: Optimize for race conditions and storage size
+      // Current implementation: read-all -> modify -> write-all has race condition risk
+      // Future: Move to per-exercise map keyed by id or use batched debounced writes
       const exercises = await this.getAllExercises();
       const existingIndex = exercises.findIndex(e => e.id === exercise.id);
       
@@ -194,11 +198,11 @@ class StorageService {
       
       if (!searchTerm) return allExercises;
       
-      return allExercises.filter(exercise => 
-        exercise.name.toLowerCase().includes(searchTerm) ||
-        exercise.category.toLowerCase().includes(searchTerm) ||
-        exercise.muscleGroups.some(muscle => muscle.toLowerCase().includes(searchTerm)) ||
-        exercise.equipmentNeeded.some(equipment => equipment.toLowerCase().includes(searchTerm))
+      return allExercises.filter(({ name, category, muscleGroups = [], equipmentNeeded = [] }) =>
+        name?.toLowerCase().includes(searchTerm) ||
+        category?.toLowerCase().includes(searchTerm) ||
+        muscleGroups.some(m => m?.toLowerCase().includes(searchTerm)) ||
+        equipmentNeeded.some(eq => eq?.toLowerCase().includes(searchTerm))
       );
     } catch (error) {
       console.error('❌ ExerciseManager - Error searching exercises:', error);
@@ -221,10 +225,12 @@ class StorageService {
       const allExercises = await this.getAllExercises();
       if (equipment.length === 0) return allExercises;
       
-      return allExercises.filter(exercise => 
-        equipment.every(eq => exercise.equipmentNeeded.includes(eq)) ||
-        (equipment.includes('bodyweight') && exercise.equipmentNeeded.length === 0)
-      );
+      const wanted = equipment.map(e => e.toLowerCase());
+      return allExercises.filter(({ equipmentNeeded = [] }) => {
+        const current = equipmentNeeded.map(e => e.toLowerCase());
+        return wanted.some(w => current.includes(w)) ||
+               (wanted.includes('bodyweight') && current.length === 0);
+      });
     } catch (error) {
       console.error('❌ ExerciseManager - Error filtering by equipment:', error);
       return [];

@@ -35,10 +35,17 @@ export default function App() {
     try {
       console.log('🚀 App.tsx - Starting app initialization...');
       
-      // Force update to load expanded exercise database
-      console.log(`🚀 App.tsx - Loading expanded exercise database with ${defaultExercises.length} exercises`);
-      await storageService.saveExercises(defaultExercises);
-      console.log('✅ Expanded exercise database loaded');
+      // Check if exercise database needs update (versioned migration)
+      const existingExercises = await storageService.getAllExercises();
+      const needsUpdate = existingExercises.length === 0 || existingExercises.length < defaultExercises.length;
+      
+      if (needsUpdate) {
+        console.log(`🚀 App.tsx - Updating exercise database: ${existingExercises.length} → ${defaultExercises.length} exercises`);
+        await storageService.saveExercises(defaultExercises);
+        console.log('✅ Exercise database updated');
+      } else {
+        console.log(`✅ Exercise database current: ${existingExercises.length} exercises`);
+      }
 
       // Check if routines are already loaded
       const existingRoutines = await storageService.getAllRoutines();

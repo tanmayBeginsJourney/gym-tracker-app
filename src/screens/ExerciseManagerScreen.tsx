@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -59,7 +59,6 @@ const DIFFICULTY_LEVELS = [
 
 export default function ExerciseManagerScreen({ navigation, route }: Props) {
   const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [filteredExercises, setFilteredExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -92,10 +91,6 @@ export default function ExerciseManagerScreen({ navigation, route }: Props) {
     }
   }, []);
 
-  useEffect(() => {
-    filterExercises();
-  }, [exercises, searchQuery, selectedCategory, selectedEquipment]);
-
   const loadData = async () => {
     try {
       if (__DEV__) console.log('🏋️ ExerciseManager - Loading exercises...');
@@ -109,14 +104,19 @@ export default function ExerciseManagerScreen({ navigation, route }: Props) {
     }
   };
 
-  const filterExercises = async () => {
+  // Optimized filtering with useMemo to prevent redundant calculations
+  const filteredExercises = useMemo(() => {
     try {
       let filtered = [...exercises];
       
       // Apply search filter
       if (searchQuery.trim()) {
-        const searchResults = await storageService.searchExercises(searchQuery);
-        filtered = searchResults;
+        const searchTerm = searchQuery.toLowerCase();
+        filtered = filtered.filter(({ name, category, muscleGroups = [] }) => 
+          name?.toLowerCase().includes(searchTerm) ||
+          category?.toLowerCase().includes(searchTerm) ||
+          muscleGroups.some(muscle => muscle?.toLowerCase().includes(searchTerm))
+        );
       }
       
       // Apply category filter
@@ -126,21 +126,10 @@ export default function ExerciseManagerScreen({ navigation, route }: Props) {
       
       // Apply equipment filter
       if (selectedEquipment.length > 0) {
-        filtered = await storageService.filterExercisesByEquipment(selectedEquipment);
-        
-        // Apply other filters to equipment-filtered results
-        if (searchQuery.trim()) {
-          const searchTerm = searchQuery.toLowerCase();
-          filtered = filtered.filter(exercise => 
-            exercise.name.toLowerCase().includes(searchTerm) ||
-            exercise.category.toLowerCase().includes(searchTerm) ||
-            exercise.muscleGroups.some(muscle => muscle.toLowerCase().includes(searchTerm))
-          );
-        }
-        
-        if (selectedCategory !== 'all') {
-          filtered = filtered.filter(ex => ex.category === selectedCategory);
-        }
+        filtered = filtered.filter(({ equipmentNeeded = [] }) => 
+          selectedEquipment.some(eq => equipmentNeeded.map(e => e.toLowerCase()).includes(eq.toLowerCase())) ||
+          (selectedEquipment.includes('bodyweight') && equipmentNeeded.length === 0)
+        );
       }
       
       // Sort by popularity (custom exercises at bottom)
@@ -150,11 +139,12 @@ export default function ExerciseManagerScreen({ navigation, route }: Props) {
         return (b.popularity || 0) - (a.popularity || 0);
       });
       
-      setFilteredExercises(filtered);
+      return filtered;
     } catch (error) {
       console.error('❌ ExerciseManager - Error filtering exercises:', error);
+      return exercises;
     }
-  };
+  }, [exercises, searchQuery, selectedCategory, selectedEquipment]);
 
   const openCreateExercise = () => {
     resetForm();

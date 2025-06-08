@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import { Exercise, RoutineExercise, WorkoutRoutine } from '../types';
 import { storageService } from '../services/storage';
 
 interface Props {
-  navigation: any;
+  navigation: any; // TODO: Replace with proper navigation types
   route: {
     params?: {
       editingRoutine?: WorkoutRoutine;
@@ -37,19 +37,6 @@ export default function RoutineBuilderScreen({ navigation, route }: Props) {
   const selectedExercise = route.params?.selectedExercise;
   const isEditing = !!editingRoutine;
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  useEffect(() => {
-    // Handle exercise selection from ExerciseManager
-    if (selectedExercise) {
-      addExercise(selectedExercise);
-      // Clear the parameter to prevent re-adding on re-renders
-      navigation.setParams({ selectedExercise: undefined });
-    }
-  }, [selectedExercise]);
-
   const loadData = async () => {
     try {
       console.log('🔍 Loading routine builder data...');
@@ -70,7 +57,7 @@ export default function RoutineBuilderScreen({ navigation, route }: Props) {
     }
   };
 
-  const addExercise = (exercise: Exercise) => {
+  const addExercise = useCallback((exercise: Exercise) => {
     console.log('➕ Adding exercise:', exercise.name);
     const newRoutineExercise: RoutineExercise = {
       exerciseId: exercise.id,
@@ -88,7 +75,20 @@ export default function RoutineBuilderScreen({ navigation, route }: Props) {
     storageService.updateExerciseUsage(exercise.id).catch(error => {
       if (__DEV__) console.warn('⚠️ Failed to update exercise usage:', error);
     });
-  };
+  }, [selectedExercises]);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  useEffect(() => {
+    // Handle exercise selection from ExerciseManager
+    if (selectedExercise) {
+      addExercise(selectedExercise);
+      // Clear the parameter to prevent re-adding on re-renders
+      navigation.setParams({ selectedExercise: undefined });
+    }
+  }, [selectedExercise, navigation, addExercise]);
 
   const removeExercise = (index: number) => {
     console.log('➖ Removing exercise at index:', index);
