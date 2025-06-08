@@ -255,9 +255,12 @@ class StorageService {
         };
         
         return this.setItem(STORAGE_KEYS.EXERCISES, exercises);
+      } else {
+        console.warn('⚠️ ExerciseManager - Exercise not found for usage update:', exerciseId);
       }
     } catch (error) {
       console.error('❌ ExerciseManager - Error updating exercise usage:', error);
+      throw error; // Re-throw to allow caller to handle the error
     }
   }
 
