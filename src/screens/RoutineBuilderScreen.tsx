@@ -19,6 +19,7 @@ interface Props {
   route: {
     params?: {
       editingRoutine?: WorkoutRoutine;
+      selectedExercise?: Exercise;
     };
   };
 }
@@ -30,14 +31,24 @@ export default function RoutineBuilderScreen({ navigation, route }: Props) {
   const [availableExercises, setAvailableExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [showExerciseSelector, setShowExerciseSelector] = useState(false);
+
 
   const editingRoutine = route.params?.editingRoutine;
+  const selectedExercise = route.params?.selectedExercise;
   const isEditing = !!editingRoutine;
 
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    // Handle exercise selection from ExerciseManager
+    if (selectedExercise) {
+      addExercise(selectedExercise);
+      // Clear the parameter to prevent re-adding on re-renders
+      navigation.setParams({ selectedExercise: undefined });
+    }
+  }, [selectedExercise]);
 
   const loadData = async () => {
     try {
@@ -72,7 +83,11 @@ export default function RoutineBuilderScreen({ navigation, route }: Props) {
     };
 
     setSelectedExercises([...selectedExercises, newRoutineExercise]);
-    setShowExerciseSelector(false);
+    
+    // Sprint 2.2: Track exercise usage for analytics
+    storageService.updateExerciseUsage(exercise.id).catch(error => {
+      if (__DEV__) console.warn('⚠️ Failed to update exercise usage:', error);
+    });
   };
 
   const removeExercise = (index: number) => {
@@ -253,7 +268,13 @@ export default function RoutineBuilderScreen({ navigation, route }: Props) {
             <Text style={styles.sectionTitle}>Exercises</Text>
             <TouchableOpacity
               style={styles.addButton}
-              onPress={() => setShowExerciseSelector(true)}
+              onPress={() => {
+                // Set callback function using navigation.setOptions to avoid serialization warning
+                navigation.navigate('ExerciseManager', {
+                  fromRoutineBuilder: true,
+                  routineBuilderCallback: 'addExercise'
+                });
+              }}
             >
               <Ionicons name="add" size={20} color="#4CAF50" />
               <Text style={styles.addButtonText}>Add Exercise</Text>
@@ -369,55 +390,7 @@ export default function RoutineBuilderScreen({ navigation, route }: Props) {
         </View>
       </ScrollView>
 
-      {/* Exercise Selector Modal */}
-      {showExerciseSelector && (
-        <View style={styles.modal}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Exercise</Text>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={() => setShowExerciseSelector(false)}
-              >
-                <Ionicons name="close" size={24} color="#666" />
-              </TouchableOpacity>
-            </View>
-            
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {availableExercises.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyStateText}>No exercises found</Text>
-                  <Text style={styles.emptyStateSubtext}>Please try again</Text>
-                </View>
-              ) : (
-                availableExercises.map((exercise) => (
-                  <TouchableOpacity
-                    key={exercise.id}
-                    style={styles.exerciseOption}
-                    onPress={() => addExercise(exercise)}
-                  >
-                    <View style={styles.exerciseOptionInfo}>
-                      <Text style={styles.exerciseOptionName}>{exercise.name}</Text>
-                      <Text style={styles.exerciseOptionCategory}>
-                        {exercise.category.charAt(0).toUpperCase() + exercise.category.slice(1)}
-                      </Text>
-                      <Text style={styles.exerciseOptionMuscles}>
-                        {exercise.muscleGroups.join(', ')}
-                      </Text>
-                    </View>
-                    <View style={styles.exerciseOptionMeta}>
-                      <View style={styles.difficultyBadge}>
-                        <Text style={styles.difficultyText}>{exercise.difficulty}</Text>
-                      </View>
-                      <Text style={styles.popularityText}>#{exercise.popularity}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      )}
+
     </SafeAreaView>
   );
 }
@@ -666,6 +639,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
   },
+  modalHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  manageExercisesButton: {
+    padding: 8,
+  },
+  manageExercisesText: {
+    color: '#4CAF50',
+    fontWeight: '500',
+    marginLeft: 4,
+  },
   modalCloseButton: {
     padding: 12,
   },
@@ -685,6 +670,10 @@ const styles = StyleSheet.create({
   exerciseOptionInfo: {
     flex: 1,
     paddingRight: 16,
+  },
+  exerciseOptionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   exerciseOptionName: {
     fontSize: 20,
@@ -723,5 +712,47 @@ const styles = StyleSheet.create({
   popularityText: {
     fontSize: 10,
     color: '#999',
+  },
+  customExerciseBadge: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  customExerciseBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  difficultyBeginner: {
+    backgroundColor: '#4CAF50',
+  },
+  difficultyIntermediate: {
+    backgroundColor: '#FF9800',
+  },
+  difficultyAdvanced: {
+    backgroundColor: '#F44336',
+  },
+  exerciseOptionEquipment: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  createExerciseButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 16,
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  createExerciseButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 }); 

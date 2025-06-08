@@ -194,6 +194,11 @@ const WorkoutScreen: React.FC<Props> = ({ navigation }) => {
     navigation.navigate('BundleManager', {});
   };
 
+  const navigateToExerciseManager = () => {
+    if (__DEV__) console.log('🏋️ Navigating to exercise manager');
+    navigation.navigate('ExerciseManager', {});
+  };
+
   const editRoutine = (routine: WorkoutRoutine) => {
     console.log('✏️ Editing routine:', routine.name);
     navigation.navigate('RoutineBuilder', { editingRoutine: routine });

@@ -13,6 +13,7 @@ import ChatScreen from './src/screens/ChatScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import RoutineBuilderScreen from './src/screens/RoutineBuilderScreen';
 import BundleManagerScreen from './src/screens/BundleManagerScreen';
+import ExerciseManagerScreen from './src/screens/ExerciseManagerScreen';
 
 // Import services
 import { storageService } from './src/services/storage';
@@ -34,15 +35,10 @@ export default function App() {
     try {
       console.log('🚀 App.tsx - Starting app initialization...');
       
-      // Check if exercises are already loaded
-      const existingExercises = await storageService.getAllExercises();
-      console.log(`🚀 App.tsx - Found ${existingExercises.length} existing exercises`);
-      
-      if (existingExercises.length === 0) {
-        // Load default exercises
-        await storageService.saveExercises(defaultExercises);
-        console.log('✅ Default exercises loaded');
-      }
+      // Force update to load expanded exercise database
+      console.log(`🚀 App.tsx - Loading expanded exercise database with ${defaultExercises.length} exercises`);
+      await storageService.saveExercises(defaultExercises);
+      console.log('✅ Expanded exercise database loaded');
 
       // Check if routines are already loaded
       const existingRoutines = await storageService.getAllRoutines();
@@ -151,6 +147,17 @@ export default function App() {
             options={{ 
               headerShown: true,
               title: 'Workout Schedule',
+              headerStyle: { backgroundColor: '#1a365d' },
+              headerTintColor: '#ffffff',
+              headerTitleStyle: { fontWeight: 'bold' },
+            }}
+          />
+          <Stack.Screen 
+            name="ExerciseManager" 
+            component={ExerciseManagerScreen}
+            options={{ 
+              headerShown: true,
+              title: 'Exercise Manager',
               headerStyle: { backgroundColor: '#1a365d' },
               headerTintColor: '#ffffff',
               headerTitleStyle: { fontWeight: 'bold' },

@@ -132,6 +132,125 @@ class StorageService {
     return exercises.find(e => e.id === exerciseId) || null;
   }
 
+  // Sprint 2.2: Custom Exercise Management
+  async saveExercise(exercise: Exercise): Promise<void> {
+    try {
+      if (__DEV__) console.log('🏋️ ExerciseManager - Saving exercise:', exercise.name);
+      const exercises = await this.getAllExercises();
+      const existingIndex = exercises.findIndex(e => e.id === exercise.id);
+      
+      if (existingIndex >= 0) {
+        exercises[existingIndex] = exercise;
+        if (__DEV__) console.log('✏️ ExerciseManager - Updated existing exercise:', exercise.name);
+      } else {
+        exercises.push(exercise);
+        if (__DEV__) console.log('✨ ExerciseManager - Created new exercise:', exercise.name);
+      }
+      
+      return this.setItem(STORAGE_KEYS.EXERCISES, exercises);
+    } catch (error) {
+      console.error('❌ ExerciseManager - Error saving exercise:', error);
+      throw error;
+    }
+  }
+
+  async deleteExercise(exerciseId: string): Promise<void> {
+    try {
+      if (__DEV__) console.log('🗑️ ExerciseManager - Deleting exercise:', exerciseId);
+      const exercises = await this.getAllExercises();
+      const filteredExercises = exercises.filter(e => e.id !== exerciseId);
+      return this.setItem(STORAGE_KEYS.EXERCISES, filteredExercises);
+    } catch (error) {
+      console.error('❌ ExerciseManager - Error deleting exercise:', error);
+      throw error;
+    }
+  }
+
+  async getCustomExercises(): Promise<Exercise[]> {
+    try {
+      const allExercises = await this.getAllExercises();
+      return allExercises.filter(exercise => exercise.isCustom);
+    } catch (error) {
+      console.error('❌ ExerciseManager - Error fetching custom exercises:', error);
+      return [];
+    }
+  }
+
+  async getDefaultExercises(): Promise<Exercise[]> {
+    try {
+      const allExercises = await this.getAllExercises();
+      return allExercises.filter(exercise => !exercise.isCustom);
+    } catch (error) {
+      console.error('❌ ExerciseManager - Error fetching default exercises:', error);
+      return [];
+    }
+  }
+
+  async searchExercises(query: string): Promise<Exercise[]> {
+    try {
+      if (__DEV__) console.log('🔍 ExerciseManager - Searching exercises for:', query);
+      const allExercises = await this.getAllExercises();
+      const searchTerm = query.toLowerCase().trim();
+      
+      if (!searchTerm) return allExercises;
+      
+      return allExercises.filter(exercise => 
+        exercise.name.toLowerCase().includes(searchTerm) ||
+        exercise.category.toLowerCase().includes(searchTerm) ||
+        exercise.muscleGroups.some(muscle => muscle.toLowerCase().includes(searchTerm)) ||
+        exercise.equipmentNeeded.some(equipment => equipment.toLowerCase().includes(searchTerm))
+      );
+    } catch (error) {
+      console.error('❌ ExerciseManager - Error searching exercises:', error);
+      return [];
+    }
+  }
+
+  async filterExercisesByCategory(category: string): Promise<Exercise[]> {
+    try {
+      const allExercises = await this.getAllExercises();
+      return allExercises.filter(exercise => exercise.category === category);
+    } catch (error) {
+      console.error('❌ ExerciseManager - Error filtering by category:', error);
+      return [];
+    }
+  }
+
+  async filterExercisesByEquipment(equipment: string[]): Promise<Exercise[]> {
+    try {
+      const allExercises = await this.getAllExercises();
+      if (equipment.length === 0) return allExercises;
+      
+      return allExercises.filter(exercise => 
+        equipment.every(eq => exercise.equipmentNeeded.includes(eq)) ||
+        (equipment.includes('bodyweight') && exercise.equipmentNeeded.length === 0)
+      );
+    } catch (error) {
+      console.error('❌ ExerciseManager - Error filtering by equipment:', error);
+      return [];
+    }
+  }
+
+  async updateExerciseUsage(exerciseId: string): Promise<void> {
+    try {
+      if (__DEV__) console.log('📈 ExerciseManager - Updating usage for exercise:', exerciseId);
+      const exercises = await this.getAllExercises();
+      const exerciseIndex = exercises.findIndex(e => e.id === exerciseId);
+      
+      if (exerciseIndex >= 0) {
+        exercises[exerciseIndex] = {
+          ...exercises[exerciseIndex],
+          usageCount: (exercises[exerciseIndex].usageCount || 0) + 1,
+          lastUsed: new Date()
+        };
+        
+        return this.setItem(STORAGE_KEYS.EXERCISES, exercises);
+      }
+    } catch (error) {
+      console.error('❌ ExerciseManager - Error updating exercise usage:', error);
+    }
+  }
+
   // Routine methods
   async saveRoutine(routine: WorkoutRoutine): Promise<void> {
     const routines = await this.getAllRoutines();
