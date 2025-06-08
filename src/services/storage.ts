@@ -198,12 +198,16 @@ class StorageService {
       
       if (!searchTerm) return allExercises;
       
-      return allExercises.filter(({ name, category, muscleGroups = [], equipmentNeeded = [] }) =>
-        name?.toLowerCase().includes(searchTerm) ||
-        category?.toLowerCase().includes(searchTerm) ||
-        muscleGroups.some(m => m?.toLowerCase().includes(searchTerm)) ||
-        equipmentNeeded.some(eq => eq?.toLowerCase().includes(searchTerm))
-      );
+      return allExercises.filter(({ name = '', category = '', muscleGroups = [], equipmentNeeded = [] }) => {
+        const lowerName = name.toLowerCase();
+        const lowerCategory = category.toLowerCase();
+        return (
+          lowerName.includes(searchTerm) ||
+          lowerCategory.includes(searchTerm) ||
+          muscleGroups.some(m => m?.toLowerCase()?.includes(searchTerm)) ||
+          equipmentNeeded.some(eq => eq?.toLowerCase()?.includes(searchTerm))
+        );
+      });
     } catch (error) {
       console.error('❌ ExerciseManager - Error searching exercises:', error);
       return [];

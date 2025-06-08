@@ -112,11 +112,15 @@ export default function ExerciseManagerScreen({ navigation, route }: Props) {
       // Apply search filter
       if (searchQuery.trim()) {
         const searchTerm = searchQuery.toLowerCase();
-        filtered = filtered.filter(({ name, category, muscleGroups = [] }) => 
-          name?.toLowerCase().includes(searchTerm) ||
-          category?.toLowerCase().includes(searchTerm) ||
-          muscleGroups.some(muscle => muscle?.toLowerCase().includes(searchTerm))
-        );
+        filtered = filtered.filter(({ name = '', category = '', muscleGroups = [] }) => {
+          const lowerName = name.toLowerCase();
+          const lowerCategory = category.toLowerCase();
+          return (
+            lowerName.includes(searchTerm) ||
+            lowerCategory.includes(searchTerm) ||
+            muscleGroups.some(muscle => muscle?.toLowerCase()?.includes(searchTerm))
+          );
+        });
       }
       
       // Apply category filter
