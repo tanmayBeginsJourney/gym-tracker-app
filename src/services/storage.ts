@@ -26,6 +26,16 @@ const STORAGE_KEYS = {
 class StorageService {
   // Race condition protection: Queue for exercise save operations
   private exerciseSaveQueue: Promise<void> = Promise.resolve();
+  
+  // Performance optimization: Cache for frequently accessed filtered results
+  private customExercisesCache: Exercise[] | null = null;
+  private defaultExercisesCache: Exercise[] | null = null;
+
+  // Cache management methods
+  private invalidateExerciseCache(): void {
+    this.customExercisesCache = null;
+    this.defaultExercisesCache = null;
+  }
 
   // Generic storage methods
   private async setItem<T>(key: string, value: T): Promise<void> {
@@ -122,6 +132,8 @@ class StorageService {
 
   // Exercise methods
   async saveExercises(exercises: Exercise[]): Promise<void> {
+    // Invalidate cache when exercises are bulk updated
+    this.invalidateExerciseCache();
     return this.setItem(STORAGE_KEYS.EXERCISES, exercises);
   }
 
@@ -153,6 +165,9 @@ class StorageService {
           if (__DEV__) console.log('✨ ExerciseManager - Created new exercise:', exercise.name);
         }
         
+        // Invalidate cache when exercises are modified
+        this.invalidateExerciseCache();
+        
         return this.setItem(STORAGE_KEYS.EXERCISES, exercises);
       } catch (error) {
         console.error('❌ ExerciseManager - Error saving exercise:', error);
@@ -164,21 +179,34 @@ class StorageService {
   }
 
   async deleteExercise(exerciseId: string): Promise<void> {
-    try {
-      if (__DEV__) console.log('🗑️ ExerciseManager - Deleting exercise:', exerciseId);
-      const exercises = await this.getAllExercises();
-      const filteredExercises = exercises.filter(e => e.id !== exerciseId);
-      return this.setItem(STORAGE_KEYS.EXERCISES, filteredExercises);
-    } catch (error) {
-      console.error('❌ ExerciseManager - Error deleting exercise:', error);
-      throw error;
-    }
+    // Queue this delete operation to prevent race conditions
+    this.exerciseSaveQueue = this.exerciseSaveQueue.then(async () => {
+      try {
+        if (__DEV__) console.log('🗑️ ExerciseManager - Deleting exercise:', exerciseId);
+        const exercises = await this.getAllExercises();
+        const filteredExercises = exercises.filter(e => e.id !== exerciseId);
+        
+        // Invalidate cache when exercises are modified
+        this.invalidateExerciseCache();
+        
+        return this.setItem(STORAGE_KEYS.EXERCISES, filteredExercises);
+      } catch (error) {
+        console.error('❌ ExerciseManager - Error deleting exercise:', error);
+        throw error;
+      }
+    });
+    
+    return this.exerciseSaveQueue;
   }
 
   async getCustomExercises(): Promise<Exercise[]> {
     try {
+      // Return cached result if available
+      if (this.customExercisesCache) return this.customExercisesCache;
+      
       const allExercises = await this.getAllExercises();
-      return allExercises.filter(exercise => exercise.isCustom);
+      this.customExercisesCache = allExercises.filter(exercise => exercise.isCustom);
+      return this.customExercisesCache;
     } catch (error) {
       console.error('❌ ExerciseManager - Error fetching custom exercises:', error);
       return [];
@@ -187,8 +215,12 @@ class StorageService {
 
   async getDefaultExercises(): Promise<Exercise[]> {
     try {
+      // Return cached result if available
+      if (this.defaultExercisesCache) return this.defaultExercisesCache;
+      
       const allExercises = await this.getAllExercises();
-      return allExercises.filter(exercise => !exercise.isCustom);
+      this.defaultExercisesCache = allExercises.filter(exercise => !exercise.isCustom);
+      return this.defaultExercisesCache;
     } catch (error) {
       console.error('❌ ExerciseManager - Error fetching default exercises:', error);
       return [];
@@ -247,26 +279,34 @@ class StorageService {
   }
 
   async updateExerciseUsage(exerciseId: string): Promise<void> {
-    try {
-      if (__DEV__) console.log('📈 ExerciseManager - Updating usage for exercise:', exerciseId);
-      const exercises = await this.getAllExercises();
-      const exerciseIndex = exercises.findIndex(e => e.id === exerciseId);
-      
-      if (exerciseIndex >= 0) {
-        exercises[exerciseIndex] = {
-          ...exercises[exerciseIndex],
-          usageCount: (exercises[exerciseIndex].usageCount || 0) + 1,
-          lastUsed: new Date()
-        };
+    // Queue this update operation to prevent race conditions
+    this.exerciseSaveQueue = this.exerciseSaveQueue.then(async () => {
+      try {
+        if (__DEV__) console.log('📈 ExerciseManager - Updating usage for exercise:', exerciseId);
+        const exercises = await this.getAllExercises();
+        const exerciseIndex = exercises.findIndex(e => e.id === exerciseId);
         
-        return this.setItem(STORAGE_KEYS.EXERCISES, exercises);
-      } else {
-        console.warn('⚠️ ExerciseManager - Exercise not found for usage update:', exerciseId);
+        if (exerciseIndex >= 0) {
+          exercises[exerciseIndex] = {
+            ...exercises[exerciseIndex],
+            usageCount: (exercises[exerciseIndex].usageCount || 0) + 1,
+            lastUsed: new Date()
+          };
+          
+          // Invalidate cache when exercises are modified
+          this.invalidateExerciseCache();
+          
+          return this.setItem(STORAGE_KEYS.EXERCISES, exercises);
+        } else {
+          console.warn('⚠️ ExerciseManager - Exercise not found for usage update:', exerciseId);
+        }
+      } catch (error) {
+        console.error('❌ ExerciseManager - Error updating exercise usage:', error);
+        throw error; // Re-throw to allow caller to handle the error
       }
-    } catch (error) {
-      console.error('❌ ExerciseManager - Error updating exercise usage:', error);
-      throw error; // Re-throw to allow caller to handle the error
-    }
+    });
+    
+    return this.exerciseSaveQueue;
   }
 
   // Routine methods
