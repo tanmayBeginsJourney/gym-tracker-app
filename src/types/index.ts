@@ -54,6 +54,12 @@ export interface Exercise {
   difficulty: 'beginner' | 'intermediate' | 'advanced';
   equipmentNeeded: string[];
   popularity: number; // 1-100 ranking for popular exercises first
+  // Sprint 2.2: Custom exercise support
+  isCustom?: boolean; // Distinguish custom vs default exercises
+  createdAt?: Date; // When custom exercise was created
+  createdBy?: string; // User ID who created the exercise
+  usageCount?: number; // Track how often exercise is used
+  lastUsed?: Date; // When exercise was last used in a routine
 }
 
 // Enhanced Routine Exercise with more configuration
@@ -208,9 +214,15 @@ export type RootStackParamList = {
   WorkoutMain: undefined;
   RoutineBuilder: {
     editingRoutine?: WorkoutRoutine;
+    selectedExercise?: Exercise;
   };
   BundleManager: {
     editingBundle?: RoutineBundle;
+  };
+  ExerciseManager: {
+    editingExercise?: Exercise;
+    fromRoutineBuilder?: boolean;
+    routineBuilderCallback?: string;
   };
   Progress: undefined;
   Nutrition: undefined;
