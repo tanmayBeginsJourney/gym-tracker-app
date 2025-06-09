@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -14,17 +14,25 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import RoutineBuilderScreen from './src/screens/RoutineBuilderScreen';
 import BundleManagerScreen from './src/screens/BundleManagerScreen';
 import ExerciseManagerScreen from './src/screens/ExerciseManagerScreen';
+import ProfileSelectionScreen from './src/screens/ProfileSelectionScreen';
+import WorkoutHistoryScreen from './src/screens/WorkoutHistoryScreen';
+import AllExercisesScreen from './src/screens/AllExercisesScreen';
+import ExerciseHistoryScreen from './src/screens/ExerciseHistoryScreen';
 
 // Import services
 import { storageService } from './src/services/storage';
 import { defaultExercises, defaultRoutines } from './src/data/exercises';
 
-import type { RootStackParamList } from './src/types';
+import type { RootStackParamList, StorageMode } from './src/types';
+import { AppState } from './src/types';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
 export default function App() {
   console.log('🚀 App.tsx - Application starting...');
+  
+  const [appState, setAppState] = useState<AppState>(AppState.ProfileSelection);
+  const [isInitialized, setIsInitialized] = useState(false);
   
   useEffect(() => {
     console.log('🚀 App.tsx - useEffect triggered, initializing app...');
@@ -33,7 +41,21 @@ export default function App() {
 
   const initializeApp = async () => {
     try {
-      console.log('🚀 App.tsx - Starting app initialization...');
+      console.log('🚀 App.tsx - useEffect triggered, initializing app...');
+      
+      // Cleanup stale active workout sessions
+      await storageService.cleanupStaleActiveWorkouts();
+      
+      // Load saved mode first
+      const savedMode = await storageService.getSavedStorageMode();
+      if (savedMode) {
+        console.log('🔄 App.tsx - Restored saved mode:', savedMode);
+        await storageService.switchToProfile(savedMode);
+        setAppState(savedMode.type === 'demo' ? AppState.DemoMode : AppState.RealMode);
+      } else {
+        console.log('📱 App.tsx - No saved mode, showing profile selection');
+        setAppState(AppState.ProfileSelection);
+      }
       
       // Smart exercise database migration - preserve custom exercises
       const existingExercises = await storageService.getAllExercises();
@@ -74,7 +96,8 @@ export default function App() {
         console.log('✅ Default routines loaded');
       }
 
-      // Check if user profile exists, create a basic one if not
+      // Only create default profile if we're in real mode and no profile exists
+      if (!storageService.isInDemoMode()) {
       const existingProfile = await storageService.getUserProfile();
       console.log('🚀 App.tsx - Existing profile:', existingProfile ? 'Found' : 'Not found');
       
@@ -87,7 +110,7 @@ export default function App() {
           weight: 70,
           height: 175,
           gender: 'other' as const,
-          experienceLevel: 'beginner' as const,
+            experienceLevel: 'intermediate' as const,
           goals: ['strength', 'muscle'] as Array<'strength' | 'muscle' | 'endurance' | 'weight_loss'>,
           createdAt: new Date(),
           personalDetails: {
@@ -110,14 +133,51 @@ export default function App() {
         
         await storageService.saveUserProfile(defaultProfile);
         console.log('✅ Default user profile created');
+        }
       }
 
+      setIsInitialized(true);
       console.log('🚀 App initialized successfully');
     } catch (error) {
       console.error('❌ App initialization failed:', error);
+      setIsInitialized(true); // Still allow app to continue
     }
   };
 
+  const handleProfileSelected = async (mode: StorageMode) => {
+    console.log('🎯 App.tsx - Profile selected:', mode);
+    
+    try {
+      await storageService.switchToProfile(mode);
+      
+      if (mode.type === 'demo') {
+        setAppState(AppState.DemoMode);
+      } else {
+        setAppState(AppState.RealMode);
+      }
+      
+      console.log('✅ App.tsx - Successfully switched to profile mode:', mode.type);
+    } catch (error) {
+      console.error('❌ App.tsx - Error switching profile:', error);
+    }
+  };
+
+  // Show profile selection if not initialized or in ProfileSelection state
+  if (!isInitialized || appState === AppState.ProfileSelection) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar style="auto" />
+        {isInitialized ? (
+          <ProfileSelectionScreen onProfileSelected={handleProfileSelected} />
+        ) : (
+          // You could add a loading screen here
+          <></>
+        )}
+      </SafeAreaProvider>
+    );
+  }
+
+  // Main app navigation for both demo and real modes
   return (
     <SafeAreaProvider>
       <StatusBar style="auto" />
@@ -184,6 +244,18 @@ export default function App() {
               headerTintColor: '#ffffff',
               headerTitleStyle: { fontWeight: 'bold' },
             }}
+          />
+          <Stack.Screen 
+            name="WorkoutHistory" 
+            component={WorkoutHistoryScreen}
+          />
+          <Stack.Screen 
+            name="AllExercises" 
+            component={AllExercisesScreen}
+          />
+          <Stack.Screen 
+            name="ExerciseHistory" 
+            component={ExerciseHistoryScreen}
           />
         </Stack.Navigator>
       </NavigationContainer>

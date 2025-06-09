@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { WorkoutRoutine, Workout, RoutineBundle, RootStackParamList } from '../types';
+import { WorkoutRoutine, Workout, RoutineBundle, RootStackParamList, ActiveWorkoutSession, DayOfWeek } from '../types';
 import { storageService } from '../services/storage';
 import { defaultRoutines } from '../data/exercises';
 import ActiveWorkoutScreen from './ActiveWorkoutScreen';
@@ -34,64 +34,68 @@ const WorkoutScreen: React.FC<Props> = ({ navigation }) => {
   const [recentWorkouts, setRecentWorkouts] = useState<Workout[]>([]);
   const [loading, setLoading] = useState(true);
   const [isMountedRef, setIsMountedRef] = useState(true);
+  const [activeWorkoutSession, setActiveWorkoutSession] = useState<ActiveWorkoutSession | null>(null);
 
   const loadData = useCallback(async () => {
+    if (!isMountedRef) return;
+    
     try {
       console.log('🔍 Loading workout screen data...');
       setLoading(true);
-      const [bundlesData, routinesData, recentWorkoutsData] = await Promise.all([
-        storageService.getAllRoutineBundles(),
+      
+      const [
+        allRoutines,
+        routineBundles,
+        workouts,
+        activeSession
+      ] = await Promise.all([
         storageService.getAllRoutines(),
-        storageService.getAllWorkouts()
+        storageService.getAllRoutineBundles(),
+        storageService.getAllWorkouts(),
+        storageService.getActiveWorkoutSession()
       ]);
 
-      if (!isMountedRef) return;
-
-      // Initialize with default routines if none exist
-      let allRoutines = routinesData;
-      if (allRoutines.length === 0) {
-        console.log('📥 Initializing with default routines...');
-        for (const routine of defaultRoutines) {
-          await storageService.saveRoutine(routine);
-        }
-        allRoutines = [...defaultRoutines];
+      if (activeSession) {
+        console.log('✅ Found active workout session:', activeSession.routine.name);
       }
 
-      const defaultBundle = bundlesData.find(b => b.isDefault) || null;
       if (!isMountedRef) return;
-      setDefaultBundle(defaultBundle);
-      setAvailableRoutines(allRoutines);
 
-      const customRoutines = allRoutines.filter(r => r.isCustom);
-      if (!isMountedRef) return;
+      const defaultBundle = routineBundles.find(bundle => bundle.isDefault);
+      const customRoutines = allRoutines.filter(routine => routine.isCustom);
+      const availableRoutines = [...defaultRoutines, ...customRoutines];
+      
+      setAvailableRoutines(availableRoutines);
       setCustomRoutines(customRoutines);
-
-      // Get today's routine from bundle or fallback
-      let todaysRoutine = null;
-      if (defaultBundle) {
-        const todaysRoutineFromBundle = await storageService.getTodaysRoutine();
-        todaysRoutine = todaysRoutineFromBundle;
+      setDefaultBundle(defaultBundle || null);
+      setRecentWorkouts(workouts.slice(0, 5));
+      setActiveWorkoutSession(activeSession);
+      
+             // Load today's routine
+       if (defaultBundle) {
+         const today = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() as DayOfWeek;
+         const routineId = defaultBundle.routineSchedule[today];
+        
+        if (routineId) {
+          const todaysRoutine = availableRoutines.find(r => r.id === routineId);
+          setTodaysRoutine(todaysRoutine || null);
+        } else {
+          // Fallback logic
+          const fallbackRoutine = getFallbackTodaysRoutine(availableRoutines);
+          setTodaysRoutine(fallbackRoutine);
+        }
+      } else {
+        console.log('⚠️ No default bundle set');
+        const fallbackRoutine = getFallbackTodaysRoutine(availableRoutines);
+        setTodaysRoutine(fallbackRoutine);
       }
       
-      if (!todaysRoutine) {
-        todaysRoutine = getFallbackTodaysRoutine(allRoutines);
-      }
-
-      if (!isMountedRef) return;
-      setTodaysRoutine(todaysRoutine);
-
-      // Get recent workouts (last 5)
-      const sortedWorkouts = recentWorkoutsData
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-        .slice(0, 5);
-
-      if (!isMountedRef) return;
-      setRecentWorkouts(sortedWorkouts);
     } catch (error) {
-      console.error('❌ Error loading workout screen data:', error);
-      Alert.alert('Error', 'Failed to load workout data. Please try again.');
+      console.error('❌ Error loading workout data:', error);
     } finally {
-      if (isMountedRef) setLoading(false);
+      if (isMountedRef) {
+        setLoading(false);
+      }
     }
   }, [isMountedRef]);
 
@@ -159,6 +163,8 @@ const WorkoutScreen: React.FC<Props> = ({ navigation }) => {
   const onWorkoutCancel = () => {
     setSelectedRoutine(null);
     setWorkoutState('browse');
+    // Refresh data to update active workout session status after cancel
+    loadData();
   };
 
   const onCompletionDismiss = () => {
@@ -194,8 +200,6 @@ const WorkoutScreen: React.FC<Props> = ({ navigation }) => {
     navigation.navigate('BundleManager', {});
   };
 
-
-
   const editRoutine = (routine: WorkoutRoutine) => {
     console.log('✏️ Editing routine:', routine.name);
     navigation.navigate('RoutineBuilder', { editingRoutine: routine });
@@ -230,6 +234,14 @@ const WorkoutScreen: React.FC<Props> = ({ navigation }) => {
         },
       ]
     );
+  };
+
+  const resumeActiveWorkout = () => {
+    if (activeWorkoutSession) {
+      console.log('🔄 Resuming active workout session:', activeWorkoutSession.routine.name);
+      setSelectedRoutine(activeWorkoutSession.routine);
+      setWorkoutState('active');
+    }
   };
 
   if (loading) {
@@ -292,6 +304,24 @@ const WorkoutScreen: React.FC<Props> = ({ navigation }) => {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Active Workout Session Alert */}
+        {activeWorkoutSession && (
+          <View style={styles.activeWorkoutAlert}>
+            <View style={styles.activeWorkoutInfo}>
+              <Ionicons name="fitness" size={20} color="#f59e0b" />
+              <View style={styles.activeWorkoutText}>
+                <Text style={styles.activeWorkoutTitle}>Workout in Progress</Text>
+                <Text style={styles.activeWorkoutSubtitle}>
+                  {activeWorkoutSession.routine.name} • Exercise {activeWorkoutSession.currentExerciseIndex + 1}/{activeWorkoutSession.routine.exercises.length}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity style={styles.continueWorkoutButton} onPress={resumeActiveWorkout}>
+              <Text style={styles.continueWorkoutText}>Continue</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Bundle Status */}
         {defaultBundle ? (
@@ -885,6 +915,48 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 80,
+  },
+  // Active Workout Alert Styles
+  activeWorkoutAlert: {
+    backgroundColor: '#fef3c7',
+    borderLeftWidth: 4,
+    borderLeftColor: '#f59e0b',
+    margin: 16,
+    padding: 16,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  activeWorkoutInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  activeWorkoutText: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  activeWorkoutTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#92400e',
+    marginBottom: 2,
+  },
+  activeWorkoutSubtitle: {
+    fontSize: 14,
+    color: '#a16207',
+  },
+  continueWorkoutButton: {
+    backgroundColor: '#f59e0b',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  continueWorkoutText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
 });
 

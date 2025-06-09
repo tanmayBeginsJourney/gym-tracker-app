@@ -48,7 +48,7 @@ const ChatScreen: React.FC = () => {
       const welcomeMessage: ChatMessage = {
         id: 'welcome-1',
         role: 'assistant',
-        content: "Hey there! 💪 I'm your AI fitness coach. I can help you with workouts, nutrition, motivation, and track your progress. What would you like to know?",
+        content: "Hey there! I'm your AI fitness coach. I can help you with workouts, nutrition, motivation, and track your progress. What would you like to know?",
         timestamp: new Date()
       };
       

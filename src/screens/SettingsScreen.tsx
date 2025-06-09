@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,15 @@ import {
   ScrollView,
   Alert,
   Switch,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { storageService } from '../services/storage';
+import { demoDataService } from '../services/demoDataService';
 import SidebarNav from '../components/SidebarNav';
-import type { RootStackParamList } from '../types';
+import type { RootStackParamList, StorageMode, DemoProfile } from '../types';
 
 type SettingsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Settings'>;
 
@@ -23,6 +25,22 @@ const SettingsScreen: React.FC = () => {
   const navigation = useNavigation<SettingsScreenNavigationProp>();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [autoBackup, setAutoBackup] = useState(false);
+  const [currentMode, setCurrentMode] = useState<StorageMode>({ type: 'real' });
+  const [demoProfiles] = useState<DemoProfile[]>(demoDataService.getAllDemoProfiles());
+  const [showProfileModal, setShowProfileModal] = useState(false);
+
+  useEffect(() => {
+    loadCurrentMode();
+  }, []);
+
+  const loadCurrentMode = async () => {
+    try {
+      const mode = await storageService.getCurrentMode();
+      setCurrentMode(mode);
+    } catch (error) {
+      console.error('Error loading current mode:', error);
+    }
+  };
 
   const clearCustomRoutines = async () => {
     const allRoutines = await storageService.getAllRoutines();
@@ -196,6 +214,96 @@ const SettingsScreen: React.FC = () => {
     );
   };
 
+  const handleSwitchProfile = () => {
+    console.log('⚙️ All demo profiles:', demoProfiles.map(p => ({ id: p.id, name: p.name })));
+    setShowProfileModal(true);
+  };
+
+  const switchToMode = async (mode: StorageMode) => {
+    try {
+      setShowProfileModal(false);
+      await storageService.switchToProfile(mode);
+      setCurrentMode(mode);
+      
+      const profileName = mode.type === 'real' ? 'Real User' : 
+        demoProfiles.find(p => p.id === mode.profileId)?.name || 'Demo User';
+      
+      Alert.alert(
+        'Profile Switched',
+        `Now using: ${profileName}`,
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('❌ Switch profile error:', error);
+      Alert.alert('Error', 'Failed to switch profile.');
+    }
+  };
+
+  const ProfileModal = () => (
+    <Modal
+      visible={showProfileModal}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={() => setShowProfileModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Switch Profile</Text>
+          <Text style={styles.modalSubtitle}>Choose which profile you want to use:</Text>
+          
+          <TouchableOpacity 
+            style={[styles.profileOption, currentMode.type === 'real' && styles.profileOptionActive]}
+            onPress={() => switchToMode({ type: 'real' })}
+          >
+            <View style={styles.profileOptionLeft}>
+              <Ionicons name="person" size={24} color={currentMode.type === 'real' ? '#3182ce' : '#4a5568'} />
+              <Text style={[styles.profileOptionText, currentMode.type === 'real' && styles.profileOptionActiveText]}>
+                Real User Profile
+              </Text>
+            </View>
+            {currentMode.type === 'real' && <Ionicons name="checkmark" size={20} color="#3182ce" />}
+          </TouchableOpacity>
+
+          {demoProfiles.map(profile => (
+            <TouchableOpacity 
+              key={profile.id}
+              style={[
+                styles.profileOption, 
+                currentMode.type === 'demo' && currentMode.profileId === profile.id && styles.profileOptionActive
+              ]}
+              onPress={() => switchToMode({ type: 'demo', profileId: profile.id })}
+            >
+              <View style={styles.profileOptionLeft}>
+                <Text style={styles.profileAvatar}>{profile.avatar}</Text>
+                <View style={styles.profileInfo}>
+                  <Text style={[
+                    styles.profileOptionText, 
+                    currentMode.type === 'demo' && currentMode.profileId === profile.id && styles.profileOptionActiveText
+                  ]}>
+                    {profile.name}
+                  </Text>
+                  <Text style={styles.profileDescription}>{profile.description}</Text>
+                </View>
+              </View>
+              {currentMode.type === 'demo' && currentMode.profileId === profile.id && (
+                <Ionicons name="checkmark" size={20} color="#3182ce" />
+              )}
+            </TouchableOpacity>
+          ))}
+
+          <TouchableOpacity 
+            style={styles.modalCancelButton}
+            onPress={() => setShowProfileModal(false)}
+          >
+            <Text style={styles.modalCancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
+
+
   const handleExportData = () => {
     if (__DEV__) console.log('⚙️ SettingsScreen - Export Data button pressed');
     Alert.alert(
@@ -294,6 +402,24 @@ const SettingsScreen: React.FC = () => {
           />
         </SettingSection>
 
+        <SettingSection title="Profile Management">
+          <SettingItem
+            icon="person-circle"
+            title="Current Profile"
+            subtitle={
+              currentMode.type === 'real' 
+                ? 'Real User Profile - Your actual data' 
+                : `Demo Profile: ${demoProfiles.find(p => p.id === currentMode.profileId)?.name || 'Unknown'}`
+            }
+          />
+          <SettingItem
+            icon="swap-horizontal"
+            title="Switch Profile"
+            subtitle="Change between demo profiles and real tracking"
+            onPress={handleSwitchProfile}
+          />
+        </SettingSection>
+
         <SettingSection title="Data Management">
           <SettingItem
             icon="download"
@@ -332,6 +458,56 @@ const SettingsScreen: React.FC = () => {
           <Text style={styles.footerSubtext}>Built with ❤️ for your fitness journey</Text>
         </View>
       </ScrollView>
+
+      {/* Profile Selection Modal */}
+      <Modal
+        visible={showProfileModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowProfileModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Switch Profile</Text>
+            <Text style={styles.modalSubtitle}>Choose which profile you want to use:</Text>
+            
+            {/* Real User Profile Option */}
+            <TouchableOpacity 
+              style={styles.profileOption}
+              onPress={() => switchToMode({ type: 'real' })}
+            >
+              <View style={styles.profileOptionLeft}>
+                <Ionicons name="person" size={24} color="#3182ce" />
+                <Text style={styles.profileOptionText}>Real User Profile</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#a0aec0" />
+            </TouchableOpacity>
+
+            {/* Demo Profile Options */}
+            {demoProfiles.map(profile => (
+              <TouchableOpacity 
+                key={profile.id}
+                style={styles.profileOption}
+                onPress={() => switchToMode({ type: 'demo', profileId: profile.id })}
+              >
+                <View style={styles.profileOptionLeft}>
+                  <Ionicons name="person-circle" size={24} color="#10b981" />
+                  <Text style={styles.profileOptionText}>{profile.name} (Demo)</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#a0aec0" />
+              </TouchableOpacity>
+            ))}
+
+            {/* Cancel Button */}
+            <TouchableOpacity 
+              style={styles.modalCancelButton}
+              onPress={() => setShowProfileModal(false)}
+            >
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -420,6 +596,86 @@ const styles = StyleSheet.create({
   footerSubtext: {
     fontSize: 14,
     color: '#718096',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 20,
+    width: '100%',
+    maxHeight: '80%',
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1a365d',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    color: '#4a5568',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  profileOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    marginBottom: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  profileOptionActive: {
+    borderColor: '#3182ce',
+    backgroundColor: '#f0f9ff',
+  },
+  profileOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  profileOptionText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1a365d',
+    marginLeft: 12,
+  },
+  profileOptionActiveText: {
+    color: '#3182ce',
+  },
+  profileAvatar: {
+    fontSize: 24,
+    marginRight: 4,
+  },
+  profileInfo: {
+    marginLeft: 8,
+    flex: 1,
+  },
+  profileDescription: {
+    fontSize: 12,
+    color: '#718096',
+    marginTop: 2,
+  },
+  modalCancelButton: {
+    backgroundColor: '#f7fafc',
+    padding: 16,
+    borderRadius: 8,
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#4a5568',
   },
 });
 

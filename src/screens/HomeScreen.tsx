@@ -43,12 +43,14 @@ const HomeScreen: React.FC = () => {
   const [streak, setStreak] = useState(0);
 
   useEffect(() => {
+    console.log('🏠 HomeScreen - Initial mount, loading data...');
     loadDashboardData();
     loadTodaysRoutine();
   }, []);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
+      console.log('🏠 HomeScreen - Screen focused, refreshing data...');
       loadDashboardData();
       loadTodaysRoutine();
     });
@@ -62,15 +64,18 @@ const HomeScreen: React.FC = () => {
       if (!loading) setLoading(true);
       
       let profile = await storageService.getUserProfile();
-      console.log('🏠 HomeScreen - Initial profile load:', profile);
+      console.log('🏠 HomeScreen - Profile loaded:', profile?.name || 'none');
       
-      // Update profile name if needed (for demo mode only)
-      if (IS_DEMO_MODE && (!profile || profile.name !== DEFAULT_USER_NAME)) {
+      // Check if we're in demo mode
+      const currentMode = await storageService.getCurrentMode();
+      const isDemo = currentMode.type === 'demo';
+      
+      if (isDemo && profile) {
         console.log('🏠 HomeScreen - Demo mode: Setting demo profile...');
-        const updatedProfile: UserProfile = profile ? {
-          ...profile,
-          name: DEFAULT_USER_NAME
-        } : {
+        // In demo mode, we already have the profile loaded correctly
+      } else if (!profile && !isDemo) {
+        console.log('🏠 HomeScreen - No profile found, creating default...');
+        const updatedProfile: UserProfile = {
           id: 'user-1',
           name: DEFAULT_USER_NAME,
           age: 25,
@@ -114,7 +119,6 @@ const HomeScreen: React.FC = () => {
       const workoutStreak = calculateWorkoutStreak(allWorkouts);
 
       setUserProfile(profile);
-      console.log('🏠 HomeScreen - Profile set to state:', profile?.name);
       setRecentWorkouts(recent);
       setTotalWorkouts(allWorkouts.length);
       setStreak(workoutStreak);
@@ -132,9 +136,14 @@ const HomeScreen: React.FC = () => {
       const bundle = await storageService.getDefaultRoutineBundle();
       setDefaultBundle(bundle);
 
-      // Initialize default routines if none exist
+      if (bundle) {
+        console.log('🎯 Default bundle:', bundle.name);
+      }
+
+      // Initialize default routines if none exist (only once)
       const existingRoutines = await storageService.getAllRoutines();
       if (existingRoutines.length === 0) {
+        console.log('📥 Initializing default routines...');
         for (const routine of defaultRoutines) {
           await storageService.saveRoutine(routine);
         }
@@ -143,6 +152,7 @@ const HomeScreen: React.FC = () => {
       // First, try to get routine from default bundle system
       const todaysRoutineFromBundle = await storageService.getTodaysRoutine();
       if (todaysRoutineFromBundle) {
+        console.log('💪 Today\'s routine:', todaysRoutineFromBundle.name);
         setTodaysRoutine(todaysRoutineFromBundle);
         return;
       }
@@ -150,6 +160,9 @@ const HomeScreen: React.FC = () => {
       // Fallback: Use simple day-based scheduling with all available routines
       const allRoutines = await storageService.getAllRoutines();
       const routine = getFallbackTodaysRoutine(allRoutines);
+      if (routine) {
+        console.log('💪 Fallback routine:', routine.name);
+      }
       setTodaysRoutine(routine);
     } catch (error) {
       console.error('❌ Error loading today\'s routine:', error);
@@ -250,6 +263,9 @@ const HomeScreen: React.FC = () => {
   const onWorkoutCancel = () => {
     setSelectedRoutine(null);
     setHomeState('dashboard');
+    // Refresh dashboard data to update active workout session status
+    loadDashboardData();
+    loadTodaysRoutine();
   };
 
   const onCompletionDismiss = () => {
@@ -330,6 +346,23 @@ const HomeScreen: React.FC = () => {
     }
   };
 
+  const showWorkoutDetails = (workout: Workout) => {
+    console.log('📱 Navigating to workout details for:', workout.id);
+    // Convert Date objects to strings to make navigation params serializable
+    const serializableWorkout = {
+      ...workout,
+      date: workout.date instanceof Date ? workout.date.toISOString() : workout.date,
+      exercises: workout.exercises.map(exercise => ({
+        ...exercise,
+        sets: exercise.sets.map(set => ({
+          ...set,
+          // Handle any Date objects in sets if they exist
+        }))
+      }))
+    };
+    navigation.navigate('WorkoutHistory', { workout: serializableWorkout });
+  };
+
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleDateString('en-US', {
       month: 'short',
@@ -388,7 +421,7 @@ const HomeScreen: React.FC = () => {
         {/* Welcome Section */}
         <View style={styles.welcomeSection}>
           <Text style={styles.welcomeText}>
-            {getDayOfWeekText()}{userProfile ? `, ${userProfile.name}` : ''}! 💪
+                          {getDayOfWeekText()}{userProfile ? `, ${userProfile.name}` : ''}!
           </Text>
           <Text style={styles.subtitleText}>
             {totalWorkouts === 0 
@@ -532,7 +565,11 @@ const HomeScreen: React.FC = () => {
             </View>
           ) : (
             recentWorkouts.map((workout, index) => (
-              <View key={workout.id} style={styles.workoutCard}>
+              <TouchableOpacity 
+                key={workout.id} 
+                style={styles.workoutCard}
+                onPress={() => showWorkoutDetails(workout)}
+              >
                 <View style={styles.workoutHeader}>
                   <Text style={styles.workoutDate}>
                     {formatDate(workout.date)}
@@ -545,9 +582,12 @@ const HomeScreen: React.FC = () => {
                   {workout.routineName || 'Custom Workout'}
                 </Text>
                 <Text style={styles.workoutExercises}>
-                  {workout.exercises.length} exercise{workout.exercises.length === 1 ? '' : 's'}
+                  {workout.exercises.length} exercise{workout.exercises.length === 1 ? '' : 's'} • Tap to view details
                 </Text>
+                <View style={styles.workoutCardIcon}>
+                  <Ionicons name="chevron-forward" size={16} color="#666" />
               </View>
+              </TouchableOpacity>
             ))
           )}
         </View>
@@ -902,6 +942,11 @@ const styles = StyleSheet.create({
   workoutExercises: {
     fontSize: 14,
     color: '#4a5568',
+  },
+  workoutCardIcon: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
   },
   actionsSection: {
     paddingHorizontal: 20,

@@ -176,6 +176,15 @@ export interface ProgressRecord {
   totalVolume: number; // total weight lifted
 }
 
+export interface PersonalRecord {
+  exerciseId: string;
+  exerciseName: string;
+  maxWeight: number;
+  maxReps: number;
+  date: Date;
+  isNewRecord?: boolean;
+}
+
 // AI Chat Types
 export interface ChatMessage {
   id: string;
@@ -228,6 +237,24 @@ export type RootStackParamList = {
   Nutrition: undefined;
   Chat: undefined;
   Settings: undefined;
+  WorkoutHistory: {
+    workout: Workout | {
+      id: string;
+      userId: string;
+      date: string; // Serialized as ISO string
+      routineId?: string;
+      routineName?: string;
+      exercises: WorkoutExercise[];
+      duration: number;
+      notes?: string;
+      mood?: 1 | 2 | 3 | 4 | 5;
+      energyLevel?: 1 | 2 | 3 | 4 | 5;
+    };
+  };
+  AllExercises: undefined;
+  ExerciseHistory: {
+    exerciseName: string;
+  };
 };
 
 // API Response Types
@@ -235,4 +262,69 @@ export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
+}
+
+// Achievement System Types
+export interface Achievement {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  unlockedAt?: Date;
+  progress?: number;
+  target?: number;
+  category: 'strength' | 'consistency' | 'volume' | 'milestone';
+}
+
+// Demo Profile System
+export interface DemoProfile {
+  id: string;
+  name: string;
+  avatar: string;
+  description: string;
+  demographics: UserProfile;
+  workoutHistory: Workout[];
+  routines: WorkoutRoutine[];
+  bundles: RoutineBundle[];
+  achievements: Achievement[];
+  socialData: AnonymousUserData[];
+}
+
+export interface StorageMode {
+  type: 'demo' | 'real';
+  profileId?: string;
+}
+
+export interface AnonymousUserData {
+  id: string;
+  age: number;
+  weight: number;
+  gender: 'male' | 'female' | 'other';
+  experienceLevel: 'beginner' | 'intermediate' | 'advanced';
+  totalWorkouts: number;
+  averageVolume: number;
+  joinedDate: Date;
+}
+
+export enum AppState {
+  ProfileSelection = 'profile-selection',
+  DemoMode = 'demo-mode',
+  RealMode = 'real-mode',
+}
+
+// Active Workout Session State
+export interface ActiveWorkoutSession {
+  id: string;
+  routine: WorkoutRoutine;
+  startTime: string; // ISO string
+  currentExerciseIndex: number;
+  workoutExercises: WorkoutExercise[];
+  currentSets: WorkoutSet[];
+  currentSetIndex: number;
+  restTimer: number;
+  isResting: boolean;
+  isInfiniteRest: boolean;
+  infiniteRestStartTime: string | null; // ISO string
+  profileId?: string; // Track which profile started this workout
+  lastActivity: string; // ISO string for cleanup
 } 
