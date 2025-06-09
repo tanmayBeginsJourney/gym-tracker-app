@@ -8,8 +8,12 @@ import {
   RoutineBundle,
   DayOfWeek,
   ChatMessage,
-  ProgressRecord
+  ProgressRecord,
+  StorageMode,
+  DemoProfile,
+  ActiveWorkoutSession
 } from '../types';
+import { demoDataService } from './demoDataService';
 
 // Storage Keys
 const STORAGE_KEYS = {
@@ -21,9 +25,16 @@ const STORAGE_KEYS = {
   ROUTINE_BUNDLES: 'routine_bundles',
   CHAT_HISTORY: 'chat_history',
   PROGRESS: 'progress',
+  STORAGE_MODE: 'storage_mode', // New: Track current mode
+  ACTIVE_WORKOUT: 'active_workout', // New: Track active workout session
 } as const;
 
 class StorageService {
+  // Demo Profile System
+  private currentMode: StorageMode = { type: 'real' };
+  private currentDemoProfile: DemoProfile | null = null;
+  private userAdditions: { [profileId: string]: Workout[] } = {}; // User-added workouts for demo profiles
+  
   // Race condition protection: Queue for exercise save operations
   private exerciseSaveQueue: Promise<void> = Promise.resolve();
   
@@ -35,6 +46,134 @@ class StorageService {
   private invalidateExerciseCache(): void {
     this.customExercisesCache = null;
     this.defaultExercisesCache = null;
+  }
+
+  // Demo Profile System Methods
+  async switchToProfile(mode: StorageMode): Promise<void> {
+    console.log('🔄 StorageService - Switching to mode:', mode);
+    this.currentMode = mode;
+    
+    if (mode.type === 'demo' && mode.profileId) {
+      this.currentDemoProfile = demoDataService.getDemoProfile(mode.profileId);
+      console.log('📊 StorageService - Loaded demo profile:', this.currentDemoProfile?.name);
+    } else {
+      this.currentDemoProfile = null;
+      
+      // When switching to real mode, clean up any contaminated demo data
+      if (mode.type === 'real') {
+        await this.cleanupRealProfileData();
+      }
+      
+      // Clean up memory for demo profile user additions
+      this.cleanupDemoMemory();
+    }
+    
+    // Save current mode to storage
+    await this.setItem(STORAGE_KEYS.STORAGE_MODE, mode);
+    
+    // Clear caches when switching modes
+    this.invalidateExerciseCache();
+  }
+
+  private cleanupDemoMemory(): void {
+    // Clean up demo profile user additions to prevent memory leaks
+    const oldProfileCount = Object.keys(this.userAdditions).length;
+    this.userAdditions = {};
+    if (oldProfileCount > 0) {
+      console.log(`🧹 Cleaned up ${oldProfileCount} demo profile(s) from memory`);
+    }
+  }
+
+  async getCurrentMode(): Promise<StorageMode> {
+    if (this.currentMode.type === 'real') {
+      // Try to load from storage on first access
+      const savedMode = await this.getItem<StorageMode>(STORAGE_KEYS.STORAGE_MODE);
+      if (savedMode) {
+        this.currentMode = savedMode;
+        if (savedMode.type === 'demo' && savedMode.profileId) {
+          this.currentDemoProfile = demoDataService.getDemoProfile(savedMode.profileId);
+        }
+      }
+    }
+    return this.currentMode;
+  }
+
+  async getSavedStorageMode(): Promise<StorageMode | null> {
+    return this.getItem<StorageMode>(STORAGE_KEYS.STORAGE_MODE);
+  }
+
+  getCurrentDemoProfile(): DemoProfile | null {
+    return this.currentDemoProfile;
+  }
+
+  isInDemoMode(): boolean {
+    return this.currentMode.type === 'demo';
+  }
+
+  async resetToProfileSelection(): Promise<void> {
+    console.log('🔄 StorageService - Resetting to profile selection');
+    this.currentMode = { type: 'real' };
+    this.currentDemoProfile = null;
+    await this.removeItem(STORAGE_KEYS.STORAGE_MODE);
+  }
+
+  // Clean up contaminated real profile data
+  async cleanupRealProfileData(): Promise<void> {
+    if (this.isInDemoMode()) {
+      console.log('⚠️ Cannot cleanup data while in demo mode');
+      return;
+    }
+    
+    console.log('🧹 Cleaning up contaminated real profile data...');
+    
+    // Check for demo-profile contaminated bundles and remove them
+    const bundles = await this.getItem<RoutineBundle[]>(STORAGE_KEYS.ROUTINE_BUNDLES);
+    if (bundles && bundles.length > 0) {
+      // Look for bundles that belong to demo profiles (contain demo profile IDs or names)
+      const cleanBundles = bundles.filter(bundle => {
+        const isDemoBundle = bundle.id.includes('demo-') || 
+                           bundle.name.includes('Emma') ||
+                           bundle.name.includes('Tanmay') ||
+                           bundle.name.includes('Alex') ||
+                           bundle.name.includes('Maya') ||
+                           bundle.id.includes('emma-') ||
+                           bundle.id.includes('tanmay-') ||
+                           bundle.id.includes('alex-') ||
+                           bundle.id.includes('maya-');
+        
+        if (isDemoBundle) {
+          console.log('🗑️ Removing contaminated demo bundle from real profile:', bundle.name);
+        }
+        
+        return !isDemoBundle;
+      });
+      
+      await this.setItem(STORAGE_KEYS.ROUTINE_BUNDLES, cleanBundles);
+      console.log(`🧹 Cleaned up bundles: ${bundles.length - cleanBundles.length} demo bundles removed`);
+    }
+    
+    // Similarly clean routines if needed
+    const routines = await this.getItem<WorkoutRoutine[]>(STORAGE_KEYS.ROUTINES);
+    if (routines && routines.length > 0) {
+      const cleanRoutines = routines.filter(routine => {
+        const isDemoRoutine = routine.id.includes('demo-') || 
+                             routine.name.includes('Emma') ||
+                             routine.name.includes('Tanmay') ||
+                             routine.name.includes('Alex') ||
+                             routine.name.includes('Maya');
+        
+        if (isDemoRoutine) {
+          console.log('🗑️ Removing contaminated demo routine from real profile:', routine.name);
+        }
+        
+        return !isDemoRoutine;
+      });
+      
+      await this.setItem(STORAGE_KEYS.ROUTINES, cleanRoutines);
+      console.log(`🧹 Cleaned up routines: ${routines.length - cleanRoutines.length} demo routines removed`);
+    }
+    
+    console.log('✅ Real profile data cleanup completed');
   }
 
   // Generic storage methods
@@ -69,21 +208,49 @@ class StorageService {
 
   // User Profile methods
   async saveUserProfile(profile: UserProfile): Promise<void> {
+    if (this.isInDemoMode()) {
+      console.log('⚠️ StorageService - Cannot save user profile in demo mode');
+      return; // Don't save to storage in demo mode
+    }
     return this.setItem(STORAGE_KEYS.USER_PROFILE, profile);
   }
 
   async getUserProfile(): Promise<UserProfile | null> {
+    if (this.isInDemoMode() && this.currentDemoProfile) {
+      return this.currentDemoProfile.demographics;
+    }
     return this.getItem<UserProfile>(STORAGE_KEYS.USER_PROFILE);
   }
 
   // Workout methods
   async saveWorkout(workout: Workout): Promise<void> {
+    if (this.isInDemoMode()) {
+      console.log('💾 StorageService - Saving workout to demo profile as user addition');
+      // In demo mode, save as user addition on top of demo data
+      if (this.currentDemoProfile) {
+        const profileId = this.currentDemoProfile.id;
+        if (!this.userAdditions[profileId]) {
+          this.userAdditions[profileId] = [];
+        }
+        this.userAdditions[profileId].push(workout);
+        console.log(`💾 Added user workout to ${this.currentDemoProfile.name}. User additions: ${this.userAdditions[profileId].length}`);
+      }
+      return; // Don't save to persistent storage, just add to user additions
+    }
     const workouts = await this.getAllWorkouts();
     const updatedWorkouts = [...workouts, workout];
     return this.setItem(STORAGE_KEYS.WORKOUTS, updatedWorkouts);
   }
 
   async getAllWorkouts(): Promise<Workout[]> {
+    if (this.isInDemoMode() && this.currentDemoProfile) {
+      const profileId = this.currentDemoProfile.id;
+      const originalWorkouts = this.currentDemoProfile.workoutHistory;
+      const userWorkouts = this.userAdditions[profileId] || [];
+      const allWorkouts = [...originalWorkouts, ...userWorkouts];
+      console.log(`📋 Returning workouts for ${this.currentDemoProfile.name}: ${originalWorkouts.length} original + ${userWorkouts.length} user additions = ${allWorkouts.length} total`);
+      return allWorkouts;
+    }
     const workouts = await this.getItem<Workout[]>(STORAGE_KEYS.WORKOUTS);
     return workouts || [];
   }
@@ -97,6 +264,10 @@ class StorageService {
   }
 
   async deleteWorkout(workoutId: string): Promise<void> {
+    if (this.isInDemoMode()) {
+      console.log('⚠️ StorageService - Cannot delete workout in demo mode');
+      return; // Don't modify storage in demo mode
+    }
     const workouts = await this.getAllWorkouts();
     const filteredWorkouts = workouts.filter(w => w.id !== workoutId);
     return this.setItem(STORAGE_KEYS.WORKOUTS, filteredWorkouts);
@@ -104,6 +275,10 @@ class StorageService {
 
   // Nutrition methods
   async saveDailyNutrition(nutrition: DailyNutrition): Promise<void> {
+    if (this.isInDemoMode()) {
+      console.log('⚠️ StorageService - Cannot save nutrition in demo mode');
+      return; // Don't save to storage in demo mode
+    }
     const allNutrition = await this.getAllNutrition();
     const existingIndex = allNutrition.findIndex(
       n => new Date(n.date).toDateString() === new Date(nutrition.date).toDateString()
@@ -119,6 +294,10 @@ class StorageService {
   }
 
   async getAllNutrition(): Promise<DailyNutrition[]> {
+    if (this.isInDemoMode() && this.currentDemoProfile) {
+      // Demo profiles might have nutrition data in the future
+      return []; // For now, return empty array for demo mode
+    }
     const nutrition = await this.getItem<DailyNutrition[]>(STORAGE_KEYS.NUTRITION);
     return nutrition || [];
   }
@@ -132,6 +311,10 @@ class StorageService {
 
   // Exercise methods
   async saveExercises(exercises: Exercise[]): Promise<void> {
+    if (this.isInDemoMode()) {
+      console.log('⚠️ StorageService - Cannot save exercises in demo mode');
+      return; // Don't save to storage in demo mode
+    }
     // Invalidate cache when exercises are bulk updated
     this.invalidateExerciseCache();
     return this.setItem(STORAGE_KEYS.EXERCISES, exercises);
@@ -149,6 +332,10 @@ class StorageService {
 
   // Sprint 2.2: Custom Exercise Management with race condition protection
   async saveExercise(exercise: Exercise): Promise<void> {
+    if (this.isInDemoMode()) {
+      console.log('⚠️ StorageService - Cannot save exercise in demo mode');
+      return; // Don't save to storage in demo mode
+    }
     // Queue this save operation to prevent race conditions
     this.exerciseSaveQueue = this.exerciseSaveQueue.then(async () => {
       try {
@@ -179,6 +366,10 @@ class StorageService {
   }
 
   async deleteExercise(exerciseId: string): Promise<void> {
+    if (this.isInDemoMode()) {
+      console.log('⚠️ StorageService - Cannot delete exercise in demo mode');
+      return; // Don't modify storage in demo mode
+    }
     // Queue this delete operation to prevent race conditions
     this.exerciseSaveQueue = this.exerciseSaveQueue.then(async () => {
       try {
@@ -279,6 +470,10 @@ class StorageService {
   }
 
   async updateExerciseUsage(exerciseId: string): Promise<void> {
+    if (this.isInDemoMode()) {
+      console.log('⚠️ StorageService - Cannot update exercise usage in demo mode');
+      return; // Don't modify storage in demo mode
+    }
     // Queue this update operation to prevent race conditions
     this.exerciseSaveQueue = this.exerciseSaveQueue.then(async () => {
       try {
@@ -311,6 +506,10 @@ class StorageService {
 
   // Routine methods
   async saveRoutine(routine: WorkoutRoutine): Promise<void> {
+    if (this.isInDemoMode()) {
+      console.log('⚠️ StorageService - Cannot save routine in demo mode');
+      return; // Don't save to storage in demo mode
+    }
     const routines = await this.getAllRoutines();
     const existingIndex = routines.findIndex(r => r.id === routine.id);
     
@@ -324,6 +523,9 @@ class StorageService {
   }
 
   async getAllRoutines(): Promise<WorkoutRoutine[]> {
+    if (this.isInDemoMode() && this.currentDemoProfile) {
+      return this.currentDemoProfile.routines;
+    }
     const routines = await this.getItem<WorkoutRoutine[]>(STORAGE_KEYS.ROUTINES);
     return routines || [];
   }
@@ -334,6 +536,10 @@ class StorageService {
   }
 
   async deleteRoutine(routineId: string): Promise<void> {
+    if (this.isInDemoMode()) {
+      console.log('⚠️ StorageService - Cannot delete routine in demo mode');
+      return; // Don't modify storage in demo mode
+    }
     const routines = await this.getAllRoutines();
     const filteredRoutines = routines.filter(r => r.id !== routineId);
     return this.setItem(STORAGE_KEYS.ROUTINES, filteredRoutines);
@@ -341,6 +547,10 @@ class StorageService {
 
   // Routine Bundle methods
   async saveRoutineBundle(bundle: RoutineBundle): Promise<void> {
+    if (this.isInDemoMode()) {
+      console.log('⚠️ StorageService - Cannot save routine bundle in demo mode');
+      return; // Don't save to storage in demo mode
+    }
     try {
       console.log('💾 Saving routine bundle:', bundle.name);
       const bundles = await this.getAllRoutineBundles();
@@ -369,6 +579,9 @@ class StorageService {
 
   async getAllRoutineBundles(): Promise<RoutineBundle[]> {
     try {
+          if (this.isInDemoMode() && this.currentDemoProfile) {
+      return this.currentDemoProfile.bundles;
+      }
       const bundles = await this.getItem<RoutineBundle[]>(STORAGE_KEYS.ROUTINE_BUNDLES);
       return bundles || [];
     } catch (error) {
@@ -400,6 +613,10 @@ class StorageService {
   }
 
   async setDefaultRoutineBundle(bundleId: string): Promise<void> {
+    if (this.isInDemoMode()) {
+      console.log('⚠️ StorageService - Cannot set default routine bundle in demo mode');
+      return; // Don't modify storage in demo mode
+    }
     try {
       console.log('🎯 Setting new default bundle:', bundleId);
       const bundles = await this.getAllRoutineBundles();
@@ -417,6 +634,10 @@ class StorageService {
   }
 
   async deleteRoutineBundle(bundleId: string): Promise<void> {
+    if (this.isInDemoMode()) {
+      console.log('⚠️ StorageService - Cannot delete routine bundle in demo mode');
+      return; // Don't modify storage in demo mode
+    }
     try {
       console.log('🗑️ Deleting routine bundle:', bundleId);
       const bundles = await this.getAllRoutineBundles();
@@ -489,28 +710,48 @@ class StorageService {
 
   // Chat methods
   async saveChatMessage(message: ChatMessage): Promise<void> {
+    if (this.isInDemoMode()) {
+      console.log('⚠️ StorageService - Cannot save chat message in demo mode');
+      return; // Don't save to storage in demo mode
+    }
     const chatHistory = await this.getChatHistory();
     const updatedHistory = [...chatHistory, message];
     return this.setItem(STORAGE_KEYS.CHAT_HISTORY, updatedHistory);
   }
 
   async getChatHistory(): Promise<ChatMessage[]> {
+    if (this.isInDemoMode() && this.currentDemoProfile) {
+      // Demo profiles might have chat history in the future
+      return []; // For now, return empty array for demo mode
+    }
     const chatHistory = await this.getItem<ChatMessage[]>(STORAGE_KEYS.CHAT_HISTORY);
     return chatHistory || [];
   }
 
   async clearChatHistory(): Promise<void> {
+    if (this.isInDemoMode()) {
+      console.log('⚠️ StorageService - Cannot clear chat history in demo mode');
+      return; // Don't modify storage in demo mode
+    }
     return this.setItem(STORAGE_KEYS.CHAT_HISTORY, []);
   }
 
   // Progress methods
   async saveProgressRecord(record: ProgressRecord): Promise<void> {
+    if (this.isInDemoMode()) {
+      console.log('⚠️ StorageService - Cannot save progress record in demo mode');
+      return; // Don't save to storage in demo mode
+    }
     const progress = await this.getAllProgress();
     const updatedProgress = [...progress, record];
     return this.setItem(STORAGE_KEYS.PROGRESS, updatedProgress);
   }
 
   async getAllProgress(): Promise<ProgressRecord[]> {
+    if (this.isInDemoMode() && this.currentDemoProfile) {
+      // Demo profiles might have progress data in the future
+      return []; // For now, return empty array for demo mode
+    }
     const progress = await this.getItem<ProgressRecord[]>(STORAGE_KEYS.PROGRESS);
     return progress || [];
   }
@@ -521,15 +762,30 @@ class StorageService {
   }
 
   async clearAllProgress(): Promise<void> {
+    if (this.isInDemoMode()) {
+      console.log('⚠️ StorageService - Cannot clear progress in demo mode');
+      return; // Don't modify storage in demo mode
+    }
     return this.setItem(STORAGE_KEYS.PROGRESS, []);
   }
 
   async clearAllWorkouts(): Promise<void> {
+    if (this.isInDemoMode() && this.currentDemoProfile) {
+      // In demo mode, only clear user additions, preserve original demo data
+      const profileId = this.currentDemoProfile.id;
+      this.userAdditions[profileId] = [];
+      console.log(`🗑️ Cleared user additions for demo profile: ${this.currentDemoProfile.name}. Original demo data preserved.`);
+      return;
+    }
     return this.setItem(STORAGE_KEYS.WORKOUTS, []);
   }
 
   // Utility methods
   async clearAllData(): Promise<void> {
+    if (this.isInDemoMode()) {
+      console.log('⚠️ StorageService - Cannot clear all data in demo mode');
+      return; // Don't modify storage in demo mode
+    }
     const keys = Object.values(STORAGE_KEYS);
     await Promise.all(keys.map(key => this.removeItem(key)));
   }
@@ -550,9 +806,14 @@ class StorageService {
   }
 
   async importData(jsonData: string): Promise<void> {
+    if (this.isInDemoMode()) {
+      console.log('⚠️ StorageService - Cannot import data in demo mode');
+      return; // Don't modify storage in demo mode
+    }
     try {
       const data = JSON.parse(jsonData);
       
+      // Use proper save methods that respect validation
       if (data.userProfile) await this.saveUserProfile(data.userProfile);
       if (data.workouts) await this.setItem(STORAGE_KEYS.WORKOUTS, data.workouts);
       if (data.nutrition) await this.setItem(STORAGE_KEYS.NUTRITION, data.nutrition);
@@ -561,12 +822,92 @@ class StorageService {
       if (data.routineBundles) await this.setItem(STORAGE_KEYS.ROUTINE_BUNDLES, data.routineBundles);
       if (data.chatHistory) await this.setItem(STORAGE_KEYS.CHAT_HISTORY, data.chatHistory);
       if (data.progress) await this.setItem(STORAGE_KEYS.PROGRESS, data.progress);
+      
+      // Clean caches after import
+      this.invalidateExerciseCache();
+      console.log('✅ Data import completed successfully');
     } catch (error) {
-      console.error('Error importing data:', error);
+      console.error('❌ Error importing data:', error);
       throw error;
+    }
+  }
+
+  // Active Workout Session Management
+  async saveActiveWorkoutSession(session: ActiveWorkoutSession): Promise<void> {
+    console.log('💾 Saving active workout session:', session.routine.name, 'Ex:', session.currentExerciseIndex + 1, 'Sets:', session.currentSets.length);
+    session.lastActivity = new Date().toISOString();
+    session.profileId = this.currentMode.type === 'demo' ? this.currentMode.profileId : 'real-user';
+    await this.setItem(STORAGE_KEYS.ACTIVE_WORKOUT, session);
+  }
+
+  async getActiveWorkoutSession(): Promise<ActiveWorkoutSession | null> {
+    const session = await this.getItem<ActiveWorkoutSession>(STORAGE_KEYS.ACTIVE_WORKOUT);
+    if (!session) return null;
+
+    // Check if session belongs to current profile
+    const currentProfileId = this.currentMode.type === 'demo' ? this.currentMode.profileId : 'real-user';
+    if (session.profileId !== currentProfileId) {
+      console.log('⚠️ Active workout session belongs to different profile, clearing it');
+      await this.clearActiveWorkoutSession();
+      return null;
+    }
+
+    // Check if session is stale (older than 24 hours)
+    const lastActivity = new Date(session.lastActivity);
+    const now = new Date();
+    const hoursSinceActivity = (now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60);
+    
+    if (hoursSinceActivity > 24) {
+      console.log('⚠️ Active workout session is stale (>24h), clearing it');
+      await this.clearActiveWorkoutSession();
+      return null;
+    }
+
+    console.log('✅ Found valid active workout session:', session.routine.name);
+    return session;
+  }
+
+  async clearActiveWorkoutSession(): Promise<void> {
+    console.log('🧹 Clearing active workout session');
+    await this.removeItem(STORAGE_KEYS.ACTIVE_WORKOUT);
+  }
+
+  async updateActiveWorkoutSession(updates: Partial<ActiveWorkoutSession>): Promise<void> {
+    const session = await this.getActiveWorkoutSession();
+    if (!session) {
+      console.log('⚠️ No active session to update');
+      return;
+    }
+
+    const updatedSession = {
+      ...session,
+      ...updates,
+      lastActivity: new Date().toISOString(),
+    };
+
+    await this.setItem(STORAGE_KEYS.ACTIVE_WORKOUT, updatedSession);
+  }
+
+  // Clean up stale active workout sessions (call this on app startup)
+  async cleanupStaleActiveWorkouts(): Promise<void> {
+    const session = await this.getItem<ActiveWorkoutSession>(STORAGE_KEYS.ACTIVE_WORKOUT);
+    if (!session) return;
+
+    const lastActivity = new Date(session.lastActivity);
+    const now = new Date();
+    const hoursSinceActivity = (now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60);
+    
+    if (hoursSinceActivity > 24) {
+      console.log('🧹 Cleaning up stale active workout session');
+      await this.clearActiveWorkoutSession();
     }
   }
 }
 
 // Export a singleton instance
-export const storageService = new StorageService(); 
+export const storageService = new StorageService();
+
+// Expose cleanup method for manual use if needed
+export const cleanupContaminatedData = () => storageService.cleanupRealProfileData();
+
+export default storageService; 

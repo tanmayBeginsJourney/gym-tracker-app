@@ -151,7 +151,7 @@ const WorkoutCompletionScreen: React.FC<Props> = ({ workout, onDismiss }) => {
     if (volume >= 5000) {
       achievements.push({
         id: 'high-volume',
-        title: 'Volume Beast! 💪',
+        title: 'Volume Beast!',
         description: `${Math.round(volume)}kg total volume`,
         icon: 'barbell',
         color: '#3182ce'
@@ -186,7 +186,7 @@ const WorkoutCompletionScreen: React.FC<Props> = ({ workout, onDismiss }) => {
 
   const getMotivationalMessage = () => {
     const messages = [
-      "Outstanding work! Every rep counts! 💪",
+              "Outstanding work! Every rep counts!",
       "You're getting stronger with each workout! 🔥",
       "Consistency is key, and you're nailing it! ⭐",
       "Another step closer to your goals! 🎯",
@@ -297,10 +297,6 @@ const WorkoutCompletionScreen: React.FC<Props> = ({ workout, onDismiss }) => {
 
         {/* Actions */}
         <View style={styles.actions}>
-          <TouchableOpacity style={[styles.shareButton, styles.actionsChild]}>
-            <Ionicons name="share-social" size={20} color="#3182ce" />
-            <Text style={styles.shareButtonText}>Share Progress</Text>
-          </TouchableOpacity>
           <TouchableOpacity style={styles.continueButton} onPress={onDismiss}>
             <Text style={styles.continueButtonText}>Continue</Text>
           </TouchableOpacity>
@@ -467,29 +463,10 @@ const styles = StyleSheet.create({
     color: '#4a5568',
   },
   actions: {
-    flexDirection: 'row',
     padding: 16,
-  },
-  actionsChild: {
-    marginRight: 12,
-  },
-  shareButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#e2e8f0',
-    padding: 16,
-    borderRadius: 12,
-  },
-  shareButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#3182ce',
-    marginLeft: 8,
   },
   continueButton: {
-    flex: 2,
+    width: '100%',
     backgroundColor: '#3182ce',
     padding: 16,
     borderRadius: 12,

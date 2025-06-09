@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   Vibration,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { WorkoutRoutine, Workout, WorkoutExercise, WorkoutSet } from '../types';
+import { WorkoutRoutine, Workout, WorkoutExercise, WorkoutSet, ActiveWorkoutSession } from '../types';
 import { storageService } from '../services/storage';
 
 interface Props {
@@ -32,6 +32,10 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
   const [tempWeight, setTempWeight] = useState('');
   const [tempReps, setTempReps] = useState('');
   const [currentSetIndex, setCurrentSetIndex] = useState(0);
+  const [isInfiniteRest, setIsInfiniteRest] = useState(false);
+  const [infiniteRestStartTime, setInfiniteRestStartTime] = useState<Date | null>(null);
+  const [initialRestTime, setInitialRestTime] = useState(90);
+  const [activeWorkoutSession, setActiveWorkoutSession] = useState<ActiveWorkoutSession | null>(null);
 
   const currentExercise = routine.exercises[currentExerciseIndex];
   const currentWorkoutExercise = workoutExercises[currentExerciseIndex];
@@ -42,7 +46,7 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (isResting && restTimer > 0) {
+    if (isResting && restTimer > 0 && !isInfiniteRest) {
       interval = setInterval(() => {
         setRestTimer(prev => {
           if (prev <= 1) {
@@ -55,11 +59,77 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [isResting, restTimer]);
+  }, [isResting, restTimer, isInfiniteRest]);
+
+  // Separate useEffect for infinite rest timer display updates
+  const [infiniteDisplayTime, setInfiniteDisplayTime] = useState(0);
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isInfiniteRest && infiniteRestStartTime) {
+      interval = setInterval(() => {
+        const elapsed = Math.floor((new Date().getTime() - infiniteRestStartTime.getTime()) / 1000);
+        setInfiniteDisplayTime(elapsed);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isInfiniteRest, infiniteRestStartTime]);
 
   const initializeWorkout = async () => {
     console.log('🏋️ Initializing workout:', routine.name);
     console.log('📋 Routine exercises:', routine.exercises.length);
+    
+    // Check if there's an existing active workout session
+    const existingSession = await storageService.getActiveWorkoutSession();
+    
+    if (existingSession && existingSession.routine.id === routine.id) {
+      // Resume existing session
+      console.log('🔄 Resuming existing workout session');
+      setCurrentExerciseIndex(existingSession.currentExerciseIndex);
+      setWorkoutExercises(existingSession.workoutExercises);
+      setCurrentSets(existingSession.currentSets);
+      setCurrentSetIndex(existingSession.currentSetIndex);
+      setIsResting(existingSession.isResting);
+      setIsInfiniteRest(existingSession.isInfiniteRest);
+      setInfiniteRestStartTime(existingSession.infiniteRestStartTime ? new Date(existingSession.infiniteRestStartTime) : null);
+      
+      // Calculate accurate rest timer based on elapsed time if resting
+      if (existingSession.isResting && existingSession.restTimer > 0) {
+        const sessionAge = (new Date().getTime() - new Date(existingSession.lastActivity).getTime()) / 1000;
+        const remainingTime = Math.max(0, existingSession.restTimer - Math.floor(sessionAge));
+        setRestTimer(remainingTime);
+        console.log(`⏱️ Resumed rest timer: ${remainingTime}s remaining (was ${existingSession.restTimer}s, ${Math.floor(sessionAge)}s elapsed)`);
+      } else {
+        setRestTimer(existingSession.restTimer || 0);
+      }
+      
+      setActiveWorkoutSession(existingSession);
+      
+      Alert.alert(
+        'Resume Workout?',
+        `You have an active workout session for "${routine.name}". Would you like to continue where you left off?`,
+        [
+          {
+            text: 'Start Fresh',
+            style: 'destructive',
+            onPress: () => startFreshWorkout(),
+          },
+          {
+            text: 'Resume',
+            style: 'default',
+            onPress: () => {
+              console.log('✅ User chose to resume workout session');
+            },
+          },
+        ]
+      );
+    } else {
+      // Start fresh workout
+      startFreshWorkout();
+    }
+  };
+
+  const startFreshWorkout = async () => {
+    console.log('🆕 Starting fresh workout');
     
     const firstExercise = routine.exercises[0];
     if (firstExercise) {
@@ -69,6 +139,11 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
     setCurrentExerciseIndex(0);
     setCurrentSets([]);
     setCurrentSetIndex(0);
+    setIsResting(false);
+    setRestTimer(0);
+    setIsInfiniteRest(false);
+    setInfiniteRestStartTime(null);
+    setInfiniteDisplayTime(0);
     
     // Initialize workout exercises array
     const initialExercises: WorkoutExercise[] = routine.exercises.map(ex => ({
@@ -78,6 +153,25 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
       notes: ''
     }));
     setWorkoutExercises(initialExercises);
+    
+    // Create and save new active workout session
+    const newSession: ActiveWorkoutSession = {
+      id: `workout-session-${Date.now()}`,
+      routine,
+      startTime: workoutStartTime.toISOString(),
+      currentExerciseIndex: 0,
+      workoutExercises: initialExercises,
+      currentSets: [],
+      currentSetIndex: 0,
+      restTimer: 0,
+      isResting: false,
+      isInfiniteRest: false,
+      infiniteRestStartTime: null,
+      lastActivity: new Date().toISOString(),
+    };
+    
+    await storageService.saveActiveWorkoutSession(newSession);
+    setActiveWorkoutSession(newSession);
     
     // Load defaults for first exercise
     await loadPreviousPerformance();
@@ -141,12 +235,21 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
       return;
     }
 
+    // Calculate actual rest time taken
+    let actualRestTime = 90; // Default
+    if (isInfiniteRest && infiniteRestStartTime) {
+      actualRestTime = Math.floor((new Date().getTime() - infiniteRestStartTime.getTime()) / 1000);
+    } else if (isResting) {
+      // For regular timer, calculate time elapsed vs initial time
+      actualRestTime = initialRestTime - restTimer;
+    }
+
     const newSet: WorkoutSet = {
       setNumber: currentSets.length + 1,
       reps,
       weight,
       completed: true,
-      restTime: 90 // Default rest time
+      restTime: actualRestTime
     };
 
     // Update the current exercise's sets
@@ -189,13 +292,48 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
   };
 
   const startRestTimer = () => {
+    setInitialRestTime(90);
     setRestTimer(90); // 90 seconds default
     setIsResting(true);
+    setIsInfiniteRest(false);
+    setInfiniteRestStartTime(null);
   };
 
   const skipRest = () => {
     setRestTimer(0);
     setIsResting(false);
+    setIsInfiniteRest(false);
+    setInfiniteRestStartTime(null);
+    setInfiniteDisplayTime(0);
+  };
+
+  const adjustRestTimer = (seconds: number) => {
+    if (!isInfiniteRest) {
+      setRestTimer(prev => Math.max(0, prev + seconds));
+    }
+  };
+
+  const toggleInfiniteRest = () => {
+    if (isInfiniteRest) {
+      // Ending infinite rest - calculate actual time taken
+      const actualRestTime = infiniteRestStartTime 
+        ? Math.floor((new Date().getTime() - infiniteRestStartTime.getTime()) / 1000)
+        : 90;
+      console.log(`🎯 Infinite rest ended. Total rest time: ${Math.floor(actualRestTime / 60)}:${(actualRestTime % 60).toString().padStart(2, '0')}`);
+      
+      setIsInfiniteRest(false);
+      setInfiniteRestStartTime(null);
+      setInfiniteDisplayTime(0);
+      setIsResting(false);
+      setRestTimer(0);
+    } else {
+      // Starting infinite rest
+      setIsInfiniteRest(true);
+      setInfiniteRestStartTime(new Date());
+      setInfiniteDisplayTime(0);
+      setRestTimer(0);
+      console.log('♾️ Infinite rest mode activated');
+    }
   };
 
   const moveToNextExercise = () => {
@@ -205,6 +343,9 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
       setCurrentSetIndex(0);
       setIsResting(false);
       setRestTimer(0);
+      setIsInfiniteRest(false);
+      setInfiniteRestStartTime(null);
+      setInfiniteDisplayTime(0);
       loadPreviousPerformance(); // Load defaults for next exercise
     } else {
       completeWorkout();
@@ -219,10 +360,16 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
       setCurrentSetIndex(prevExercise?.sets?.length || 0);
       setIsResting(false);
       setRestTimer(0);
+      setIsInfiniteRest(false);
+      setInfiniteRestStartTime(null);
+      setInfiniteDisplayTime(0);
     }
   };
 
   const completeWorkout = () => {
+    // Calculate workout duration in minutes
+    const currentDuration = Math.round((new Date().getTime() - workoutStartTime.getTime()) / (1000 * 60));
+    
     // Validate workout quality before allowing completion
     const exercisesWithSets = workoutExercises.filter(ex => ex.sets.length > 0);
     const totalSets = exercisesWithSets.reduce((total, ex) => total + ex.sets.length, 0);
@@ -230,7 +377,19 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
       total + ex.sets.reduce((setTotal, set) => setTotal + (set.weight * set.reps), 0), 0
     );
     
-    // Minimum workout validation
+    // 1. Minimum duration validation (2 minutes)
+    if (currentDuration < 2) {
+      Alert.alert(
+        'Workout Too Short ⏱️',
+        `Your workout has only lasted ${currentDuration < 1 ? 'less than 1 minute' : `${currentDuration} minute${currentDuration === 1 ? '' : 's'}`}. A workout needs to be at least 2 minutes long to be saved.`,
+        [
+          { text: 'Continue Workout', style: 'default' }
+        ]
+      );
+      return;
+    }
+    
+    // 2. No exercises completed validation
     if (exercisesWithSets.length === 0) {
       Alert.alert(
         'No Exercises Completed',
@@ -240,6 +399,7 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
       return;
     }
     
+    // 3. Minimal sets validation
     if (totalSets < 3) {
       Alert.alert(
         'Workout Too Short',
@@ -252,6 +412,7 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
       return;
     }
     
+    // 4. Very light workout validation
     if (totalVolume < 100) { // Less than 100kg total volume
       Alert.alert(
         'Very Light Workout',
@@ -281,6 +442,10 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
       notes: ''
     };
 
+    // Clear active workout session since workout is complete
+    storageService.clearActiveWorkoutSession();
+    setActiveWorkoutSession(null);
+
     onComplete(workout);
   };
 
@@ -290,7 +455,20 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
       'Are you sure you want to cancel? Your progress will be lost.',
       [
         { text: 'Keep Going', style: 'cancel' },
-        { text: 'Cancel Workout', style: 'destructive', onPress: onCancel }
+        { 
+          text: 'Cancel Workout', 
+          style: 'destructive', 
+          onPress: async () => {
+            console.log('🚫 User cancelled workout - cleaning up session');
+            // Clear active workout session first
+            await storageService.clearActiveWorkoutSession();
+            // Clear local state to stop any ongoing useEffects
+            setActiveWorkoutSession(null);
+            setIsResting(false);
+            setRestTimer(0);
+            onCancel();
+          }
+        }
       ]
     );
   };
@@ -301,16 +479,69 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const formatInfiniteRestTime = () => {
+    return formatTime(infiniteDisplayTime);
+  };
+
   const getProgressText = () => {
     return `Exercise ${currentExerciseIndex + 1} of ${routine.exercises.length}`;
   };
 
-  const getCurrentSetText = () => {
+  // Use useMemo to prevent recalculation and logging on every render
+  const currentSetText = useMemo(() => {
     const completedSets = currentSets.length;
-    const targetSets = currentExercise?.plannedSets || 3; // Default to 3 sets if not specified
-    console.log('📊 Set progress:', completedSets, 'completed,', targetSets, 'planned');
+    const targetSets = currentExercise?.plannedSets || 3;
     return `Set ${completedSets + 1} of ${targetSets}`;
+  }, [currentSets.length, currentExercise?.plannedSets]);
+
+  // Separate logging for set changes
+  useEffect(() => {
+    const completedSets = currentSets.length;
+    const targetSets = currentExercise?.plannedSets || 3;
+    console.log('📊 Set progress updated:', completedSets, 'completed,', targetSets, 'planned');
+  }, [currentSets.length]); // Only log when actual set count changes
+
+  const saveWorkoutSessionState = async () => {
+    if (!activeWorkoutSession) {
+      console.log('⚠️ No active session to save state for');
+      return;
+    }
+
+    console.log('💾 Saving workout session state - Exercise:', currentExerciseIndex + 1, 'Sets completed:', currentSets.length);
+
+    const updatedSession: Partial<ActiveWorkoutSession> = {
+      currentExerciseIndex,
+      workoutExercises,
+      currentSets,
+      currentSetIndex,
+      isResting,
+      isInfiniteRest,
+      // Don't save restTimer here - it's saved separately to avoid excessive updates
+    };
+
+    await storageService.updateActiveWorkoutSession(updatedSession);
   };
+
+  // Save session state only for significant changes (not rest timer)
+  useEffect(() => {
+    if (activeWorkoutSession) {
+      saveWorkoutSessionState();
+    }
+  }, [currentExerciseIndex, workoutExercises, currentSets, currentSetIndex, isResting, isInfiniteRest]);
+
+  // Save rest state only on start/stop, not during countdown
+  useEffect(() => {
+    if (activeWorkoutSession) {
+      // Save when rest starts or stops, but not during countdown
+      storageService.updateActiveWorkoutSession({ 
+        isResting,
+        isInfiniteRest,
+        infiniteRestStartTime: infiniteRestStartTime?.toISOString() || null,
+        // Save initial rest timer value when rest starts
+        ...(isResting && restTimer > 0 ? { restTimer } : {})
+      });
+    }
+  }, [isResting, isInfiniteRest, activeWorkoutSession]); // Removed restTimer to prevent excessive saves
 
   // Add safety check for currentExercise
   if (!currentExercise) {
@@ -341,10 +572,37 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
       {isResting && (
         <View style={styles.restContainer}>
           <Text style={styles.restTitle}>Rest Time</Text>
-          <Text style={styles.restTimer}>{formatTime(restTimer)}</Text>
-          <TouchableOpacity style={styles.skipRestButton} onPress={skipRest}>
-            <Text style={styles.skipRestText}>Skip Rest</Text>
-          </TouchableOpacity>
+          <Text style={styles.restTimer}>
+            {isInfiniteRest ? formatInfiniteRestTime() : formatTime(restTimer)}
+          </Text>
+          
+          {/* Rest Timer Controls */}
+          <View style={styles.restControls}>
+            {!isInfiniteRest && (
+              <>
+                <TouchableOpacity style={styles.restAdjustButton} onPress={() => adjustRestTimer(-15)}>
+                  <Text style={styles.restAdjustText}>-15s</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.restAdjustButton} onPress={() => adjustRestTimer(15)}>
+                  <Text style={styles.restAdjustText}>+15s</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+          
+          {/* Bottom Controls */}
+          <View style={styles.restBottomControls}>
+            <TouchableOpacity style={styles.skipRestButton} onPress={skipRest}>
+              <Text style={styles.skipRestText}>Skip Rest</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.infinityButton} onPress={toggleInfiniteRest}>
+              <Text style={styles.infinitySymbol}>∞</Text>
+              <Text style={styles.infinityText}>
+                {isInfiniteRest ? 'End Rest' : 'Infinite'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -352,7 +610,7 @@ const ActiveWorkoutScreen: React.FC<Props> = ({ routine, onComplete, onCancel })
       <ScrollView style={styles.content}>
         <View style={styles.exerciseCard}>
           <Text style={styles.exerciseName}>{currentExercise.exerciseName}</Text>
-          <Text style={styles.setInfo}>{getCurrentSetText()}</Text>
+          <Text style={styles.setInfo}>{currentSetText}</Text>
           
           {/* Previous Sets */}
           {currentSets.length > 0 && (
@@ -542,6 +800,48 @@ const styles = StyleSheet.create({
   skipRestText: {
     color: '#ffffff',
     fontWeight: 'bold',
+  },
+  restControls: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    gap: 12,
+  },
+  restAdjustButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  restAdjustText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  restBottomControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  infinityButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 4,
+  },
+  infinitySymbol: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  infinityText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 12,
   },
   content: {
     flex: 1,

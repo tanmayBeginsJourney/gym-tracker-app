@@ -123,7 +123,7 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ currentRoute }) => {
       <SafeAreaView style={styles.sidebarContent}>
         {/* Header */}
         <View style={styles.sidebarHeader}>
-          <Text style={styles.sidebarTitle}>💪 Gym Tracker</Text>
+          <Text style={styles.sidebarTitle}>Gym Tracker</Text>
           <TouchableOpacity onPress={closeSidebar} style={styles.closeButton}>
             <Ionicons name="close" size={24} color="#4a5568" />
           </TouchableOpacity>
@@ -167,8 +167,8 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ currentRoute }) => {
 
         {/* Footer */}
         <View style={styles.sidebarFooter}>
-          <Text style={styles.footerText}>Sprint 2.2 Focus</Text>
-          <Text style={styles.footerSubtext}>Exercise Library Management</Text>
+          <Text style={styles.footerText}>Sprint 2.3 Focus</Text>
+          <Text style={styles.footerSubtext}>Progress Analytics Foundation</Text>
         </View>
       </SafeAreaView>
     </Animated.View>
